@@ -10,30 +10,54 @@ import zovaxLogo from "/lovable-uploads/4ffcbdba-2284-45ff-8057-daf4637a1caf.png
 import { Button } from "@/components/ui/button.tsx";
 import { Input } from "@/components/ui/input.tsx";
 import { Label } from "@/components/ui/label.tsx";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs.tsx";
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@/components/ui/tabs.tsx";
 import { Checkbox } from "@/components/ui/checkbox.tsx";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card.tsx";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form.tsx";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card.tsx";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form.tsx";
 
 // Form schemas
 const signInSchema = z.object({
   email: z.string().email("Please enter a valid email address"),
-  password: z.string().min(6, "Password must be at least 6 characters")
+  password: z.string().min(8, "Password must be at least 8 characters"),
 });
-const signUpSchema = z.object({
-  name: z.string().min(2, "Name must be at least 2 characters"),
-  email: z.string().email("Please enter a valid email address"),
-  password: z.string().min(6, "Password must be at least 6 characters"),
-  confirmPassword: z.string(),
-  companyName: z.string().min(2, "Company name must be at least 2 characters"),
-  whatsappPhone: z.string().min(10, "Please enter a valid WhatsApp phone number"),
-  acceptTerms: z.boolean().refine(val => val === true, {
-    message: "You must accept the terms and conditions"
+const signUpSchema = z
+  .object({
+    name: z.string().min(2, "Name must be at least 2 characters"),
+    email: z.string().email("Please enter a valid email address"),
+    password: z.string().min(8, "Password must be at least 8 characters"),
+    confirmPassword: z.string(),
+    companyName: z
+      .string()
+      .min(2, "Company name must be at least 2 characters"),
+    whatsappPhone: z
+      .string()
+      .min(10, "Please enter a valid WhatsApp phone number"),
+    acceptTerms: z.boolean().refine((v) => v === true, {
+      message: "You must accept the terms and conditions",
+    }),
   })
-}).refine(data => data.password === data.confirmPassword, {
-  message: "Passwords don't match",
-  path: ["confirmPassword"]
-});
+  .refine((d) => d.password === d.confirmPassword, {
+    message: "Passwords don't match",
+    path: ["confirmPassword"],
+  });
 type SignInForm = z.infer<typeof signInSchema>;
 type SignUpForm = z.infer<typeof signUpSchema>;
 const Index = () => {
@@ -45,8 +69,8 @@ const Index = () => {
     resolver: zodResolver(signInSchema),
     defaultValues: {
       email: "",
-      password: ""
-    }
+      password: "",
+    },
   });
   const signUpForm = useForm<SignUpForm>({
     resolver: zodResolver(signUpSchema),
@@ -57,42 +81,45 @@ const Index = () => {
       confirmPassword: "",
       companyName: "",
       whatsappPhone: "",
-      acceptTerms: false
-    }
+      acceptTerms: false,
+    },
   });
   const onSignIn = async (data: SignInForm) => {
     const result = await signIn(data.email, data.password);
-    
     if (result.success) {
       toast({
         title: "Welcome back!",
         description: "You have been successfully signed in.",
       });
-      navigate("/dashboard");
+      navigate("/dashboard", { replace: true });
     } else {
       toast({
         title: "Sign in failed",
-        description: result.error || "Please check your credentials and try again.",
+        description:
+          result.error || "Please check your credentials and try again.",
         variant: "destructive",
       });
     }
   };
 
   const onSignUp = async (data: SignUpForm) => {
-    const result = await signUp(
-      data.name,
-      data.email,
-      data.password,
-      data.companyName,
-      data.whatsappPhone
-    );
-    
+    const result = await signUp({
+      full_name: data.name,
+      email: data.email,
+      password: data.password,
+      confirm_password: data.confirmPassword,
+      company_name: data.companyName,
+      whatsapp_business_phone: data.whatsappPhone,
+      accept_terms: data.acceptTerms,
+    });
+
     if (result.success) {
       toast({
         title: "Account created!",
-        description: "Welcome to ZOVAX. Your account has been created successfully.",
+        description:
+          "Welcome to ZOVAX. Your account has been created successfully.",
       });
-      navigate("/dashboard");
+      navigate("/dashboard", { replace: true });
     } else {
       toast({
         title: "Sign up failed",
@@ -101,17 +128,24 @@ const Index = () => {
       });
     }
   };
-  return <div className="min-h-screen bg-background flex">
+  return (
+    <div className="min-h-screen bg-background flex">
       {/* Left Side - Authentication */}
       <div className="w-full lg:w-2/5 flex items-center justify-center p-8">
         <div className="w-full max-w-md space-y-8">
           {/* ZOVAX Logo */}
           <div className="text-center">
             <div className="mb-4 text-center">
-              <img src={brainIcon} alt="ZOVAX AI Brain Icon" className="w-16 h-16 mx-auto mb-2" />
+              <img
+                src={brainIcon}
+                alt="ZOVAX AI Brain Icon"
+                className="w-16 h-16 mx-auto mb-2"
+              />
             </div>
             <p className="text-muted-foreground mt-2">
-              {activeTab === "signin" ? "Welcome back to ZOVAX" : "Welcome to ZOVAX"}
+              {activeTab === "signin"
+                ? "Welcome back to ZOVAX"
+                : "Welcome to ZOVAX"}
             </p>
             <p className="text-sm text-muted-foreground mt-1">
               Automate your customer conversations
@@ -119,7 +153,11 @@ const Index = () => {
           </div>
 
           {/* Authentication Tabs */}
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+          <Tabs
+            value={activeTab}
+            onValueChange={setActiveTab}
+            className="w-full"
+          >
             <TabsList className="grid w-full grid-cols-2">
               <TabsTrigger value="signin">Sign In</TabsTrigger>
               <TabsTrigger value="signup">Sign Up</TabsTrigger>
@@ -128,29 +166,47 @@ const Index = () => {
             {/* Sign In Form */}
             <TabsContent value="signin" className="mt-6">
               <Form {...signInForm}>
-                <form onSubmit={signInForm.handleSubmit(onSignIn)} className="space-y-4">
-                  <FormField control={signInForm.control} name="email" render={({
-                  field
-                }) => <FormItem>
+                <form
+                  onSubmit={signInForm.handleSubmit(onSignIn)}
+                  className="space-y-4"
+                >
+                  <FormField
+                    control={signInForm.control}
+                    name="email"
+                    render={({ field }) => (
+                      <FormItem>
                         <FormLabel>Email</FormLabel>
                         <FormControl>
                           <Input placeholder="Enter your email" {...field} />
                         </FormControl>
                         <FormMessage />
-                      </FormItem>} />
-                  
-                  <FormField control={signInForm.control} name="password" render={({
-                  field
-                }) => <FormItem>
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={signInForm.control}
+                    name="password"
+                    render={({ field }) => (
+                      <FormItem>
                         <FormLabel>Password</FormLabel>
                         <FormControl>
-                          <Input type="password" placeholder="Enter your password" {...field} />
+                          <Input
+                            type="password"
+                            placeholder="Enter your password"
+                            {...field}
+                          />
                         </FormControl>
                         <FormMessage />
-                      </FormItem>} />
+                      </FormItem>
+                    )}
+                  />
 
                   <div className="flex items-center justify-end">
-                    <button type="button" className="text-sm text-primary hover:underline">
+                    <button
+                      type="button"
+                      className="text-sm text-primary hover:underline"
+                    >
                       Forgot password?
                     </button>
                   </div>
@@ -165,83 +221,137 @@ const Index = () => {
             {/* Sign Up Form */}
             <TabsContent value="signup" className="mt-6">
               <Form {...signUpForm}>
-                <form onSubmit={signUpForm.handleSubmit(onSignUp)} className="space-y-4">
-                  <FormField control={signUpForm.control} name="name" render={({
-                  field
-                }) => <FormItem>
+                <form
+                  onSubmit={signUpForm.handleSubmit(onSignUp)}
+                  className="space-y-4"
+                >
+                  <FormField
+                    control={signUpForm.control}
+                    name="name"
+                    render={({ field }) => (
+                      <FormItem>
                         <FormLabel>Full Name</FormLabel>
                         <FormControl>
-                          <Input placeholder="Enter your full name" {...field} />
+                          <Input
+                            placeholder="Enter your full name"
+                            {...field}
+                          />
                         </FormControl>
-                        <FormMessage />  
-                      </FormItem>} />
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
 
-                  <FormField control={signUpForm.control} name="email" render={({
-                  field
-                }) => <FormItem>
+                  <FormField
+                    control={signUpForm.control}
+                    name="email"
+                    render={({ field }) => (
+                      <FormItem>
                         <FormLabel>Email</FormLabel>
                         <FormControl>
                           <Input placeholder="Enter your email" {...field} />
                         </FormControl>
                         <FormMessage />
-                      </FormItem>} />
-                  
-                  <FormField control={signUpForm.control} name="password" render={({
-                  field
-                }) => <FormItem>
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={signUpForm.control}
+                    name="password"
+                    render={({ field }) => (
+                      <FormItem>
                         <FormLabel>Password</FormLabel>
                         <FormControl>
-                          <Input type="password" placeholder="Create a password" {...field} />
+                          <Input
+                            type="password"
+                            placeholder="Create a password"
+                            {...field}
+                          />
                         </FormControl>
                         <FormMessage />
-                      </FormItem>} />
+                      </FormItem>
+                    )}
+                  />
 
-                  <FormField control={signUpForm.control} name="confirmPassword" render={({
-                  field
-                }) => <FormItem>
+                  <FormField
+                    control={signUpForm.control}
+                    name="confirmPassword"
+                    render={({ field }) => (
+                      <FormItem>
                         <FormLabel>Confirm Password</FormLabel>
                         <FormControl>
-                          <Input type="password" placeholder="Confirm your password" {...field} />
+                          <Input
+                            type="password"
+                            placeholder="Confirm your password"
+                            {...field}
+                          />
                         </FormControl>
                         <FormMessage />
-                      </FormItem>} />
+                      </FormItem>
+                    )}
+                  />
 
-                  <FormField control={signUpForm.control} name="companyName" render={({
-                  field
-                }) => <FormItem>
+                  <FormField
+                    control={signUpForm.control}
+                    name="companyName"
+                    render={({ field }) => (
+                      <FormItem>
                         <FormLabel>Company Name</FormLabel>
                         <FormControl>
-                          <Input placeholder="Enter your company name" {...field} />
+                          <Input
+                            placeholder="Enter your company name"
+                            {...field}
+                          />
                         </FormControl>
                         <FormMessage />
-                      </FormItem>} />
+                      </FormItem>
+                    )}
+                  />
 
-                  <FormField control={signUpForm.control} name="whatsappPhone" render={({
-                  field
-                }) => <FormItem>
+                  <FormField
+                    control={signUpForm.control}
+                    name="whatsappPhone"
+                    render={({ field }) => (
+                      <FormItem>
                         <FormLabel>WhatsApp Business Phone</FormLabel>
                         <FormControl>
-                          <Input placeholder="e.g., +1-555-123-4567" {...field} />
+                          <Input
+                            placeholder="e.g., +1-555-123-4567"
+                            {...field}
+                          />
                         </FormControl>
                         <FormMessage />
-                      </FormItem>} />
+                      </FormItem>
+                    )}
+                  />
 
-                  <FormField control={signUpForm.control} name="acceptTerms" render={({
-                  field
-                }) => <FormItem className="flex flex-row items-start space-x-3 space-y-0">
+                  <FormField
+                    control={signUpForm.control}
+                    name="acceptTerms"
+                    render={({ field }) => (
+                      <FormItem className="flex flex-row items-start space-x-3 space-y-0">
                         <FormControl>
-                          <Checkbox checked={field.value} onCheckedChange={field.onChange} />
+                          <Checkbox
+                            checked={field.value}
+                            onCheckedChange={field.onChange}
+                          />
                         </FormControl>
                         <div className="space-y-1 leading-none">
                           <FormLabel className="text-sm">
                             I accept the{" "}
-                            <button type="button" className="text-primary hover:underline">
+                            <button
+                              type="button"
+                              className="text-primary hover:underline"
+                            >
                               terms and conditions
                             </button>
                           </FormLabel>
                           <FormMessage />
                         </div>
-                      </FormItem>} />
+                      </FormItem>
+                    )}
+                  />
 
                   <Button type="submit" className="w-full" disabled={loading}>
                     {loading ? "Creating account..." : "Create Account"}
@@ -267,18 +377,21 @@ const Index = () => {
 
           {/* ZOVAX Logo Hero */}
           <div className="w-full max-w-lg">
-            <img src={zovaxLogo} alt="ZOVAX - Intelligent automation platform" className="w-full h-auto max-w-md mx-auto drop-shadow-lg" />
+            <img
+              src={zovaxLogo}
+              alt="ZOVAX - Intelligent automation platform"
+              className="w-full h-auto max-w-md mx-auto drop-shadow-lg"
+            />
           </div>
 
           <div className="mt-8 space-y-4">
             <h3 className="text-xl font-semibold text-foreground mb-2">
               Transform Your Customer Experience
             </h3>
-            
-            
           </div>
         </div>
       </div>
-    </div>;
+    </div>
+  );
 };
 export default Index;

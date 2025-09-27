@@ -87,7 +87,7 @@ class TenantCreate(TenantBase):
 class TenantRead(TenantBase):
     id: int
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 
 # User
@@ -106,7 +106,7 @@ class UserRead(UserBase):
     created_at: datetime
     updated_at: datetime
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 
 # Session
@@ -123,7 +123,7 @@ class SessionRead(SessionBase):
     updated_at: datetime
     message_count: int
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 
 # Conversation
@@ -138,7 +138,7 @@ class ConversationRead(ConversationBase):
     id: int
     created_at: datetime
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 
 # Resource
@@ -157,4 +157,31 @@ class ResourceRead(ResourceBase):
     id: int
     created_at: datetime
     class Config:
-        orm_mode = True
+        from_attributes = True
+
+class SignUpRequest(BaseModel):
+    full_name: str = Field(..., min_length=2, max_length=120)
+    email: EmailStr
+    password: str = Field(..., min_length=8)
+    confirm_password: str = Field(..., min_length=8)
+    company_name: str = Field(..., min_length=2, max_length=150)
+    whatsapp_business_phone: Optional[str] = Field(None, pattern=r"^\+?[0-9\-()\s]{7,20}$")
+    accept_terms: bool = Field(..., description="Must be True to create an account")
+
+class AuthUser(BaseModel):
+    user_id: int
+    user_name: str
+    email_address: EmailStr
+    role: str
+    tenant_id: Optional[int] = None
+    class Config:
+        from_attributes = True
+
+class AuthResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    user: AuthUser
+
+class SignInRequest(BaseModel):
+    email: EmailStr
+    password: str = Field(..., min_length=8)

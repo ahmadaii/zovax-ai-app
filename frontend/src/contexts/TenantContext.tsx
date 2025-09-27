@@ -1,129 +1,118 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { Tenant, User } from '@/types/tenant.ts';
-import { mockDataService } from '@/services/mockDataService.ts';
+import React, {
+  createContext,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+import { api } from "@/lib/api";
 
-interface TenantContextType {
-  currentTenant: Tenant | null;
-  currentUser: User | null;
-  isAuthenticated: boolean;
-  signIn: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
-  signUp: (name: string, email: string, password: string, companyName: string, whatsappPhone: string) => Promise<{ success: boolean; error?: string }>;
-  signOut: () => void;
+type AuthUser = {
+  user_id: number;
+  user_name: string;
+  email_address: string;
+  role: string;
+  tenant_id?: number | null;
+};
+
+type AuthResponse = {
+  access_token: string;
+  token_type: "bearer";
+  user: AuthUser;
+};
+
+type Ctx = {
   loading: boolean;
-}
+  ready: boolean; // ✅ NEW: provider initialized
+  user: AuthUser | null;
+  token: string | null;
+  signIn: (
+    email: string,
+    password: string
+  ) => Promise<{ success: boolean; error?: string }>;
+  signUp: (args: any) => Promise<{ success: boolean; error?: string }>;
+  signOut: () => void;
+};
 
-const TenantContext = createContext<TenantContextType | undefined>(undefined);
+const TenantContext = createContext<Ctx | null>(null);
 
-export function useTenant() {
-  const context = useContext(TenantContext);
-  if (context === undefined) {
-    throw new Error('useTenant must be used within a TenantProvider');
-  }
-  return context;
-}
+export const TenantProvider: React.FC<{ children: React.ReactNode }> = ({
+  children,
+}) => {
+  const [loading, setLoading] = useState(false);
+  const [ready, setReady] = useState(false); // ✅
+  const [token, setToken] = useState<string | null>(null);
+  const [user, setUser] = useState<AuthUser | null>(null);
 
-interface TenantProviderProps {
-  children: ReactNode;
-}
-
-export function TenantProvider({ children }: TenantProviderProps) {
-  const [currentTenant, setCurrentTenant] = useState<Tenant | null>(null);
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  const isAuthenticated = !!currentUser && !!currentTenant;
-
+  // Initialize from localStorage synchronously on first effect
   useEffect(() => {
-    // Check for existing session
-    const savedUser = localStorage.getItem('currentUser');
-    const savedTenant = localStorage.getItem('currentTenant');
-    
-    if (savedUser && savedTenant) {
-      setCurrentUser(JSON.parse(savedUser));
-      setCurrentTenant(JSON.parse(savedTenant));
-    }
-    
-    setLoading(false);
+    const t = localStorage.getItem("token");
+    const u = localStorage.getItem("user");
+    if (t) setToken(t);
+    if (u) setUser(JSON.parse(u));
+    setReady(true);
   }, []);
 
-  const signIn = async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
+  const persist = (auth?: AuthResponse) => {
+    if (!auth) {
+      localStorage.removeItem("token");
+      localStorage.removeItem("user");
+      setToken(null);
+      setUser(null);
+      return;
+    }
+    localStorage.setItem("token", auth.access_token);
+    localStorage.setItem("user", JSON.stringify(auth.user));
+    setToken(auth.access_token);
+    setUser(auth.user);
+  };
+
+  const signIn = async (email: string, password: string) => {
+    setLoading(true);
     try {
-      setLoading(true);
-      
-      // Mock authentication - in real app, this would be an API call
-      const result = await mockDataService.authenticate(email, password);
-      
-      if (result.success && result.user && result.tenant) {
-        setCurrentUser(result.user);
-        setCurrentTenant(result.tenant);
-        
-        // Save to localStorage for persistence
-        localStorage.setItem('currentUser', JSON.stringify(result.user));
-        localStorage.setItem('currentTenant', JSON.stringify(result.tenant));
-        
-        return { success: true };
-      } else {
-        return { success: false, error: result.error || 'Authentication failed' };
-      }
-    } catch (error) {
-      return { success: false, error: 'Authentication failed' };
+      const res = await api<AuthResponse>("/auth/signin", {
+        method: "POST",
+        body: JSON.stringify({ email, password }),
+      });
+      if (!res.ok || !res.data)
+        return { success: false, error: res.error || "Sign in failed" };
+      persist(res.data);
+      return { success: true };
     } finally {
       setLoading(false);
     }
   };
 
-  const signUp = async (
-    name: string, 
-    email: string, 
-    password: string, 
-    companyName: string, 
-    whatsappPhone: string
-  ): Promise<{ success: boolean; error?: string }> => {
+  const signUp = async (args: any) => {
+    setLoading(true);
     try {
-      setLoading(true);
-      
-      // Mock registration - in real app, this would be an API call
-      const result = await mockDataService.register(name, email, password, companyName, whatsappPhone);
-      
-      if (result.success && result.user && result.tenant) {
-        setCurrentUser(result.user);
-        setCurrentTenant(result.tenant);
-        
-        // Save to localStorage for persistence
-        localStorage.setItem('currentUser', JSON.stringify(result.user));
-        localStorage.setItem('currentTenant', JSON.stringify(result.tenant));
-        
-        return { success: true };
-      } else {
-        return { success: false, error: result.error || 'Registration failed' };
-      }
-    } catch (error) {
-      return { success: false, error: 'Registration failed' };
+      const res = await api<AuthResponse>("/auth/signup", {
+        method: "POST",
+        body: JSON.stringify(args),
+      });
+      if (!res.ok || !res.data)
+        return { success: false, error: res.error || "Sign up failed" };
+      persist(res.data);
+      return { success: true };
     } finally {
       setLoading(false);
     }
   };
 
-  const signOut = () => {
-    setCurrentUser(null);
-    setCurrentTenant(null);
-    localStorage.removeItem('currentUser');
-    localStorage.removeItem('currentTenant');
-  };
+  const signOut = () => persist(undefined);
 
-  const value: TenantContextType = {
-    currentTenant,
-    currentUser,
-    isAuthenticated,
-    signIn,
-    signUp,
-    signOut,
-    loading,
-  };
+  const value = useMemo(
+    () => ({ loading, ready, user, token, signIn, signUp, signOut }),
+    [loading, ready, user, token]
+  );
 
   return (
-    <TenantContext.Provider value={value}>
-      {children}
-    </TenantContext.Provider>
+    <TenantContext.Provider value={value}>{children}</TenantContext.Provider>
   );
-}
+};
+
+export const useTenant = () => {
+  const ctx = useContext(TenantContext);
+  if (!ctx) throw new Error("useTenant must be used within TenantProvider");
+  return ctx;
+};

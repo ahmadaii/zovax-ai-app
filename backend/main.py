@@ -11,6 +11,8 @@ from fastapi.responses import JSONResponse
 
 from common.config import settings
 from common.api_utils import create_api
+from common.db_utils import init_db
+import views
 
 logging.basicConfig(
     format="%(levelname)s - %(name)s - [%(process)d] - %(message)s",
@@ -23,13 +25,14 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Starting up...")
-
+    init_db()
     yield
     # Shutdown
     logger.info("Shutting down")
     # Add any cleanup code here if needed
 
 app = create_api(title="Zovax AI App", lifespan=lifespan)
+app.include_router(views.router)
 
 if __name__ == "__main__":
     import uvicorn
