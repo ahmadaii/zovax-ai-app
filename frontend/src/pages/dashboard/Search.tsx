@@ -21,10 +21,14 @@ export default function Search() {
 
   // Dummy chat history list
   const dummyChats = [
-    { id: 101, title: "Product Installation Guide" },
+    {
+      id: 101,
+      title:
+        "Product Installation Guide With Extra Long Title That Should Be Truncated",
+    },
     { id: 102, title: "Customer Support Templates" },
     { id: 103, title: "API Integration Help" },
-    { id: 104, title: "Billing and Pricing jdewhuiogr fugewighuogbrvew fgewuifgew" },
+    { id: 104, title: "Billing and Pricing" },
     { id: 105, title: "Feature Updates" },
   ];
 
@@ -60,11 +64,6 @@ export default function Search() {
     }, 450);
   };
 
-  const handleClear = () => {
-    setMessages([]);
-    setInput("");
-  };
-
   return (
     <div className="mx-auto max-w-6xl space-y-4 p-3 sm:space-y-6 sm:p-6">
       {/* Header */}
@@ -91,9 +90,11 @@ export default function Search() {
                   <Button
                     key={chat.id}
                     variant="ghost"
-                    className="w-full justify-start text-left rounded-xl hover:bg-gradient-primary/10"
+                    className="w-full justify-start text-left rounded-xl hover:bg-primary/10"
                   >
-                    {chat.title}
+                    <span className="truncate w-full block" title={chat.title}>
+                      {chat.title}
+                    </span>
                   </Button>
                 ))}
               </div>
@@ -104,17 +105,6 @@ export default function Search() {
             Memory Hub
           </h1>
         </div>
-
-        {messages.length > 0 && (
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={handleClear}
-            className="gap-2 text-destructive"
-          >
-            <Trash2 className="h-4 w-4" /> Clear
-          </Button>
-        )}
       </div>
 
       {/* Unified container: responsive */}
@@ -129,9 +119,11 @@ export default function Search() {
               <Button
                 key={chat.id}
                 variant="ghost"
-                className="w-full justify-start text-left rounded-xl hover:bg-gradient-primary/10"
+                className="w-full justify-start text-left rounded-xl hover:bg-primary"
               >
-                {chat.title}
+                <span className="truncate w-full block" title={chat.title}>
+                  {chat.title}
+                </span>
               </Button>
             ))}
           </div>
