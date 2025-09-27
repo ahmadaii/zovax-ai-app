@@ -11,7 +11,6 @@ from pydantic import (
     field_validator
 )
 
-
 class Settings(BaseSettings):
     openai_api_key: str | None = Field(default=None, description="OpenAI API key")
     use_openai_embedder: bool = Field(default=True, description="Use OpenAI embedder")
