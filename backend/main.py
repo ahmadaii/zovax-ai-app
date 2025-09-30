@@ -32,7 +32,9 @@ async def lifespan(app: FastAPI):
     # Add any cleanup code here if needed
 
 app = create_api(title="Zovax AI App", lifespan=lifespan)
-app.include_router(views.router)
+app.include_router(views.auth_router)
+app.include_router(views.conversation_router)
+
 
 if __name__ == "__main__":
     import uvicorn
