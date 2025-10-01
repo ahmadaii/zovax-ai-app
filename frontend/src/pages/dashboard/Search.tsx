@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from "react";
 import { Send, Sparkles, Trash2, MessageSquare } from "lucide-react";
 import { Input } from "@/components/ui/input.tsx";
 import { Button } from "@/components/ui/button.tsx";
-import { Card, CardContent } from "@/components/ui/card.tsx";
 import {
   Sheet,
   SheetContent,
@@ -11,15 +10,29 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet.tsx";
 
+type Role = "user" | "assistant";
+type Variant = "normal" | "log" | "error";
+type Msg = { id: number; role: Role; content: string; variant?: Variant };
+
+const STREAM_URL = "/api/chat/stream"; // <-- your FastAPI route
+
+// Payload constants (as requested)
+const TENANT_ID = "tenant_001";
+const USER_ID = "user_123";
+const SESSION_ID = "session_456";
+
 export default function Search() {
-  const [messages, setMessages] = useState<
-    Array<{ id: number; role: "user" | "assistant"; content: string }>
-  >([]);
+  const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
-  const [isTyping, setIsTyping] = useState(false);
+  const [assistantStatus, setAssistantStatus] = useState<
+    null | "thinking" | "typing"
+  >(null);
+  const [inFlight, setInFlight] = useState(false);
   const chatEndRef = useRef<HTMLDivElement | null>(null);
 
-  // Dummy chat history list
+  const activeAssistantMsgIdRef = useRef<number | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
+
   const dummyChats = [
     {
       id: 101,
@@ -40,28 +53,149 @@ export default function Search() {
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, isTyping]);
+  }, [messages, assistantStatus]);
 
-  const handleSend = (e?: React.FormEvent) => {
+  function appendMessage(
+    role: Role,
+    content: string,
+    variant: Variant = "normal",
+    id?: number
+  ) {
+    const msg: Msg = { id: id ?? Date.now(), role, content, variant };
+    setMessages((prev) => [...prev, msg]);
+    return msg.id;
+  }
+
+  function updateAssistantMessageContent(id: number, delta: string) {
+    setMessages((prev) =>
+      prev.map((m) => (m.id === id ? { ...m, content: m.content + delta } : m))
+    );
+  }
+
+  async function streamToFrontend(userText: string) {
+    // Abort any previous stream if still running
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+
+    setInFlight(true);
+    setAssistantStatus("thinking");
+
+    try {
+      const resp = await fetch(STREAM_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tenant_id: TENANT_ID,
+          user_id: USER_ID,
+          session_id: SESSION_ID,
+          message: userText,
+          reset_context: false,
+        }),
+        signal: controller.signal,
+      });
+
+      if (!resp.ok || !resp.body) {
+        throw new Error(`HTTP ${resp.status}`);
+      }
+
+      const reader = resp.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      // Prepare the assistant message that will receive tokens
+      activeAssistantMsgIdRef.current = appendMessage("assistant", "");
+
+      const SEP = "###END###";
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+
+        const chunkText = decoder.decode(value, { stream: true });
+        buffer += chunkText;
+
+        // Process complete frames separated by ###END###
+        let sepIndex: number;
+        while ((sepIndex = buffer.indexOf(SEP)) !== -1) {
+          const raw = buffer.slice(0, sepIndex).trim();
+          buffer = buffer.slice(sepIndex + SEP.length);
+
+          if (!raw) continue;
+
+          let evt: any;
+          try {
+            evt = JSON.parse(raw);
+          } catch {
+            continue; // ignore malformed frames
+          }
+
+          const t = evt.type as
+            | "log"
+            | "first_token"
+            | "token"
+            | "final_token"
+            | "error";
+
+          if (t === "log") {
+            // Optional: show logs inline (as light gray assistant bubbles)
+            appendMessage("assistant", evt.content ?? "", "log");
+            setAssistantStatus("thinking");
+          } else if (t === "first_token") {
+            setAssistantStatus("typing");
+          } else if (t === "token") {
+            if (activeAssistantMsgIdRef.current != null) {
+              updateAssistantMessageContent(
+                activeAssistantMsgIdRef.current,
+                evt.content ?? ""
+              );
+            }
+          } else if (t === "final_token") {
+            setAssistantStatus(null);
+          } else if (t === "error") {
+            // Graceful error handling: stop stream, hide status, show error bubble
+            try {
+              controller.abort();
+            } catch {}
+            setAssistantStatus(null);
+            appendMessage(
+              "assistant",
+              `⚠️ ${evt.content || "An unexpected error occurred."}`,
+              "error"
+            );
+          }
+        }
+      }
+    } catch {
+      setAssistantStatus(null);
+      appendMessage(
+        "assistant",
+        "⚠️ Stream interrupted. Please try again.",
+        "error"
+      );
+    } finally {
+      setInFlight(false);
+      abortRef.current = null;
+    }
+  }
+
+  const handleSend = async (e?: React.FormEvent) => {
     e?.preventDefault();
     const trimmed = input.trim();
-    if (!trimmed) return;
+    if (!trimmed || inFlight) return;
 
-    const userMsg = { id: Date.now(), role: "user" as const, content: trimmed };
-    setMessages((prev) => [...prev, userMsg]);
+    appendMessage("user", trimmed);
     setInput("");
 
-    setIsTyping(true);
-    setTimeout(() => {
-      const reply = {
-        id: Date.now() + 1,
-        role: "assistant" as const,
-        content:
-          "This is a test response. I received your message and the backend wiring can be added next.",
-      };
-      setMessages((prev) => [...prev, reply]);
-      setIsTyping(false);
-    }, 450);
+    await streamToFrontend(trimmed);
+  };
+
+  const handleReset = () => {
+    abortRef.current?.abort();
+    setMessages([]);
+    setAssistantStatus(null);
+    setInFlight(false);
+    activeAssistantMsgIdRef.current = null;
   };
 
   return (
@@ -105,6 +239,18 @@ export default function Search() {
             Memory Hub
           </h1>
         </div>
+
+        <div className="flex items-center gap-2">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="rounded-xl"
+            onClick={handleReset}
+            title="Clear conversation"
+          >
+            <Trash2 className="h-5 w-5" />
+          </Button>
+        </div>
       </div>
 
       {/* Unified container: responsive */}
@@ -146,31 +292,35 @@ export default function Search() {
             )}
 
             <ul className="space-y-3 sm:space-y-4">
-              {messages.map((m) => (
-                <li
-                  key={m.id}
-                  className={`flex ${
-                    m.role === "user" ? "justify-end" : "justify-start"
-                  }`}
-                >
-                  <div
-                    className={
-                      "max-w-[90%] sm:max-w-[85%] rounded-2xl px-3 sm:px-4 py-2.5 sm:py-3 text-sm shadow-sm whitespace-pre-wrap break-words " +
-                      (m.role === "user"
-                        ? "bg-gradient-primary text-white"
-                        : "bg-muted text-foreground")
-                    }
-                  >
-                    {m.content}
-                  </div>
-                </li>
-              ))}
+              {messages.map((m) => {
+                const base =
+                  "max-w-[90%] sm:max-w-[85%] rounded-2xl px-3 sm:px-4 py-2.5 sm:py-3 text-sm shadow-sm whitespace-pre-wrap break-words";
+                const style =
+                  m.variant === "error"
+                    ? "bg-red-100 text-red-800 border border-red-300"
+                    : m.variant === "log"
+                    ? "bg-muted/60 text-foreground/80"
+                    : m.role === "user"
+                    ? "bg-gradient-primary text-white"
+                    : "bg-muted text-foreground";
+                const align =
+                  m.role === "user" ? "justify-end" : "justify-start";
+                return (
+                  <li key={m.id} className={`flex ${align}`}>
+                    <div className={`${base} ${style}`}>{m.content}</div>
+                  </li>
+                );
+              })}
 
-              {isTyping && (
+              {assistantStatus && (
                 <li className="flex justify-start">
                   <div className="max-w-[90%] sm:max-w-[85%] rounded-2xl bg-muted px-3 sm:px-4 py-2.5 sm:py-3 text-sm shadow-sm">
                     <span className="inline-flex items-center gap-2">
-                      <span>Assistant is typing</span>
+                      <span>
+                        {assistantStatus === "thinking"
+                          ? "Assistant is thinking..."
+                          : "Assistant is typing..."}
+                      </span>
                       <span className="flex gap-1">
                         <span className="h-1 w-1 animate-bounce rounded-full bg-foreground/60 [animation-delay:0ms]"></span>
                         <span className="h-1 w-1 animate-bounce rounded-full bg-foreground/60 [animation-delay:120ms]"></span>
@@ -195,11 +345,13 @@ export default function Search() {
                 onChange={(e) => setInput(e.target.value)}
                 placeholder="Type your message…"
                 className="py-5 sm:py-6 text-base rounded-xl"
+                disabled={inFlight}
               />
               <Button
                 type="submit"
                 size="lg"
                 className="px-4 rounded-xl bg-gradient-primary text-white"
+                disabled={inFlight}
               >
                 <Send className="h-4 w-4" />
               </Button>
