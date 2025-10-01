@@ -1,6 +1,7 @@
 import logging
 import os
 import sys
+import urllib
 from pathlib import Path
 from dotenv import load_dotenv
 from pydantic_settings import BaseSettings
@@ -36,8 +37,12 @@ class Settings(BaseSettings):
         if not self.database_url:
             if not (self.db_user and self.db_password and self.db_host and self.db_port and self.db_name):
                 raise ValueError("Either DATABASE_URL or all DB_* vars must be set")
+            
+            # Encode password to handle special characters
+            safe_password = urllib.parse.quote_plus(self.db_password)
+
             self.database_url = (
-                f"postgresql+psycopg2://{self.db_user}:{self.db_password}"
+                f"postgresql+psycopg2://{self.db_user}:{safe_password}"
                 f"@{self.db_host}:{self.db_port}/{self.db_name}"
             )
         return self

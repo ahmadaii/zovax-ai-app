@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List, Literal, Dict, Any
 from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy import Column, Integer, String, DateTime, ForeignKey
 from sqlalchemy.orm import relationship, declarative_base
@@ -185,3 +185,52 @@ class AuthResponse(BaseModel):
 class SignInRequest(BaseModel):
     email: EmailStr
     password: str = Field(..., min_length=8)
+
+class ConversationTurn(BaseModel):
+    role: Literal["user", "assistant"] = Field(
+        ...,
+        description="Who sent this message: user or assistant."
+    )
+    message: str = Field(
+        ...,
+        description="The text content of the message."
+    )
+    metadata: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description="Extra details like timestamp, channel, attachments."
+    )
+
+class ConversationRequest(BaseModel):
+    tenant_id: Optional[int] = Field(
+        default=None,
+        description="Tenant identifier (required in multi-tenant setups)."
+    )
+    user_id: int = Field(
+        ...,
+        description="Unique identifier of the user within the tenant."
+    )
+    session_id: Optional[str] = Field(
+        default=None,
+        description="Existing session ID to continue. If not provided, a new session will be created."
+    )
+    message: str = Field(
+        ...,
+        description="User's latest message to the assistant."
+    )
+    reset_context: bool = Field(
+        default=False,
+        description="If true, ignore provided history and start fresh."
+    )
+
+class ConversationResponse(BaseModel):
+    session_id: str = Field(..., description="Conversation session ID")
+    user_id: str = Field(..., description="User identifier")
+    tenant_id: Optional[str] = Field(None, description="Tenant identifier if multi-tenant")
+    timestamp: datetime = Field(default_factory=datetime.utcnow, description="When this event was created")
+
+    type: Literal["log", "first_token", "token", "final_token", "error"] = Field(
+        ..., description="Type of streaming event"
+    )
+    content: str = Field(..., description="Payload for this event (empty string for first_token/final_token)")
+
+
