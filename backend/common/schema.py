@@ -125,6 +125,18 @@ class SessionRead(SessionBase):
     class Config:
         from_attributes = True
 
+class SessionOut(BaseModel):
+    id: int
+    created_at: datetime
+    updated_at: datetime
+    message_count: int
+    topic: Optional[str]
+    status: Optional[str]
+    user_id: int
+
+    class Config:
+        orm_mode = True
+
 
 # Conversation
 class ConversationBase(BaseModel):

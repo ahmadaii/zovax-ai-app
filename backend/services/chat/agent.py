@@ -6,6 +6,8 @@ from langchain.memory.chat_memory import BaseChatMessageHistory
 
 from langchain.memory import ChatMessageHistory
 
+#from langchain_community.chat_message_histories import ChatMessageHistory
+
 
 
 async def run_openai_functions_agent(
