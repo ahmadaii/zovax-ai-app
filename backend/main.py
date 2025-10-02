@@ -34,6 +34,7 @@ async def lifespan(app: FastAPI):
 app = create_api(title="Zovax AI App", lifespan=lifespan)
 app.include_router(views.auth_router)
 app.include_router(views.conversation_router)
+app.include_router(views.session_router)
 
 
 if __name__ == "__main__":

@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta
 import re, uuid, json, asyncio
-from typing import Optional, Annotated
+from typing import Optional, Annotated, List
 
 from fastapi import APIRouter, Depends, HTTPException, status, Request, BackgroundTasks
 
@@ -16,7 +16,7 @@ from sqlalchemy.exc import IntegrityError
 
 from common.config import Settings
 from common.db_utils import get_db
-from common.schema import Tenant, User, Session, Conversation, AuthResponse, SignUpRequest, SignInRequest, ConversationRequest,ConversationResponse
+from common.schema import Tenant, User, Session, Conversation, AuthResponse, SignUpRequest, SignInRequest, ConversationRequest,ConversationResponse,SessionOut
 
 from services.chat.callback_manager import (StreamMessagesCallbackHandler, StreamToolUseCallbackHandler)
 from services.chat.chat import createGen
@@ -85,9 +85,7 @@ auth_router = APIRouter(prefix="/auth", tags=["auth"])
 # Conversation
 conversation_router = APIRouter(prefix="/conversation", tags=["conversation"])
 # Sessions
-
-
-
+session_router = APIRouter(prefix="/session", tags=["session"])
 
 _password_reqs = [
     (re.compile(r"[A-Z]"), "at least one uppercase letter"),
@@ -155,12 +153,40 @@ def signin(payload: SignInRequest, db: Session = Depends(get_db)):
 
     token = create_access_token({"sub": str(user.user_id), "tenant_id": user.tenant_id, "role": user.role})
 
-    print("-----------x-----------")
-    print("TOKEN -",token)
-    print("-----------x-----------")
-
     return AuthResponse(access_token=token, user=user)
 
+@session_router.get("/",response_model=List[SessionOut])
+async def get_sessions(
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: str,
+    user_id: str,
+    db: Session = Depends(get_db),
+):
+    """
+    Get all sessions related to a specific user under a tenant.
+    """
+
+    # --- Authorization ---
+    if current_user.role != "owner" and current_user.tenant_id != tenant_id:
+        raise HTTPException(status_code=403, detail="Not authorized to view these sessions")
+
+    # --- Check if the user exists in this tenant ---
+    user = db.query(User).filter(
+        User.user_id == user_id,
+        User.tenant_id == tenant_id
+    ).first()
+
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found in this tenant")
+
+    # --- Fetch all sessions of the user ---
+    sessions = db.query(Session).filter(Session.user_id == user_id).all()
+
+    if not sessions:
+        raise HTTPException(status_code=404, detail="No sessions found for this user")
+
+    return sessions
+    
 
 @conversation_router.post("/chat_response") #response_model=ConversationResponse
 async def chat_response(
