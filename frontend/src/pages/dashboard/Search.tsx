@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Send, Sparkles, Trash2, MessageSquare } from "lucide-react";
+import { Send, Sparkles, Trash2, MessageSquare, Plus } from "lucide-react";
 import { Input } from "@/components/ui/input.tsx";
 import { Button } from "@/components/ui/button.tsx";
 import {
@@ -9,41 +9,32 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet.tsx";
+import { useTenant } from "@/contexts/TenantContext";
 
 type Role = "user" | "assistant";
 type Variant = "normal" | "log" | "error";
 type Msg = { id: number; role: Role; content: string; variant?: Variant };
 
-const STREAM_URL = "/api/chat/stream"; // <-- your FastAPI route
-
-// Payload constants (as requested)
-const TENANT_ID = "tenant_001";
-const USER_ID = "user_123";
-const SESSION_ID = "session_456";
+const STREAM_URL =
+  import.meta.env.VITE_API_BASE_URL + "/conversation/chat_response";
 
 export default function Search() {
+  const { ready, user, token, signOut } = useTenant(); // <-- get token & user
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
   const [assistantStatus, setAssistantStatus] = useState<
     null | "thinking" | "typing"
   >(null);
   const [inFlight, setInFlight] = useState(false);
-  const chatEndRef = useRef<HTMLDivElement | null>(null);
 
+  // Conversation/session state
+  const [sessionId, setSessionId] = useState<string | null>(null); // null = brand new chat
+  const [topic, setTopic] = useState<string>("New chat");
+  const [hasActiveNewChat, setHasActiveNewChat] = useState<boolean>(true); // true until backend returns session/topic
+
+  const chatEndRef = useRef<HTMLDivElement | null>(null);
   const activeAssistantMsgIdRef = useRef<number | null>(null);
   const abortRef = useRef<AbortController | null>(null);
-
-  const dummyChats = [
-    {
-      id: 101,
-      title:
-        "Product Installation Guide With Extra Long Title That Should Be Truncated",
-    },
-    { id: 102, title: "Customer Support Templates" },
-    { id: 103, title: "API Integration Help" },
-    { id: 104, title: "Billing and Pricing" },
-    { id: 105, title: "Feature Updates" },
-  ];
 
   const intro = {
     title: "Your Memory Hub Awaits",
@@ -73,7 +64,21 @@ export default function Search() {
   }
 
   async function streamToFrontend(userText: string) {
-    // Abort any previous stream if still running
+    // Guard: must be ready and signed in
+    if (!ready) {
+      appendMessage(
+        "assistant",
+        "⚠️ App is still initializing. Please try again in a moment.",
+        "error"
+      );
+      return;
+    }
+    if (!token || !user) {
+      appendMessage("assistant", "🔒 Please sign in to chat.", "error");
+      return;
+    }
+
+    // Abort previous stream
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
@@ -82,18 +87,42 @@ export default function Search() {
     setAssistantStatus("thinking");
 
     try {
+      const payload: Record<string, any> = {
+        tenant_id: String(user.tenant_id ?? ""),
+        user_id: String(user.user_id),
+        message: userText,
+        reset_context: false,
+      };
+
+      // Only include session_id once we have it.
+      if (sessionId) {
+        payload.session_id = sessionId;
+      }
+
       const resp = await fetch(STREAM_URL, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          tenant_id: TENANT_ID,
-          user_id: USER_ID,
-          session_id: SESSION_ID,
-          message: userText,
-          reset_context: false,
-        }),
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(payload),
         signal: controller.signal,
       });
+
+      // Handle auth failure before reading the stream
+      if (resp.status === 401) {
+        setAssistantStatus(null);
+        appendMessage(
+          "assistant",
+          "🔒 Your session has expired or is invalid. Please sign in again.",
+          "error"
+        );
+        try {
+          signOut();
+        } catch {}
+        setInFlight(false);
+        return;
+      }
 
       if (!resp.ok || !resp.body) {
         throw new Error(`HTTP ${resp.status}`);
@@ -106,6 +135,7 @@ export default function Search() {
       // Prepare the assistant message that will receive tokens
       activeAssistantMsgIdRef.current = appendMessage("assistant", "");
 
+      // Accept both "###END###" and "###END###\n"
       const SEP = "###END###";
 
       while (true) {
@@ -119,7 +149,9 @@ export default function Search() {
         let sepIndex: number;
         while ((sepIndex = buffer.indexOf(SEP)) !== -1) {
           const raw = buffer.slice(0, sepIndex).trim();
+          // remove SEP and any trailing newline
           buffer = buffer.slice(sepIndex + SEP.length);
+          if (buffer.startsWith("\n")) buffer = buffer.slice(1);
 
           if (!raw) continue;
 
@@ -135,10 +167,10 @@ export default function Search() {
             | "first_token"
             | "token"
             | "final_token"
-            | "error";
+            | "error"
+            | "session"; // <-- NEW: session metadata frame
 
           if (t === "log") {
-            // Optional: show logs inline (as light gray assistant bubbles)
             appendMessage("assistant", evt.content ?? "", "log");
             setAssistantStatus("thinking");
           } else if (t === "first_token") {
@@ -152,8 +184,16 @@ export default function Search() {
             }
           } else if (t === "final_token") {
             setAssistantStatus(null);
+          } else if (t === "session") {
+            // Backend should send: { type: "session", session_id, topic }
+            if (evt.session_id && typeof evt.session_id === "string") {
+              setSessionId(evt.session_id);
+              setHasActiveNewChat(false);
+            }
+            if (evt.topic && typeof evt.topic === "string") {
+              setTopic(evt.topic);
+            }
           } else if (t === "error") {
-            // Graceful error handling: stop stream, hide status, show error bubble
             try {
               controller.abort();
             } catch {}
@@ -166,7 +206,7 @@ export default function Search() {
           }
         }
       }
-    } catch {
+    } catch (err: any) {
       setAssistantStatus(null);
       appendMessage(
         "assistant",
@@ -190,13 +230,52 @@ export default function Search() {
     await streamToFrontend(trimmed);
   };
 
+  const hardResetConversationState = () => {
+    // Reset UI and conversation state to a fresh "New chat"
+    abortRef.current?.abort();
+    setMessages([]);
+    setAssistantStatus(null);
+    setInFlight(false);
+    activeAssistantMsgIdRef.current = null;
+
+    setSessionId(null);
+    setTopic("New chat");
+    setHasActiveNewChat(true);
+  };
+
   const handleReset = () => {
+    // Clear the current conversation but keep the session if it exists
     abortRef.current?.abort();
     setMessages([]);
     setAssistantStatus(null);
     setInFlight(false);
     activeAssistantMsgIdRef.current = null;
   };
+
+  const handleNewChat = () => {
+    // Only allow one active "new chat" at a time.
+    // If we're already in a brand-new chat (no session & no messages), ignore.
+    const alreadyFresh =
+      hasActiveNewChat && sessionId === null && messages.length === 0;
+
+    if (alreadyFresh) return;
+
+    // Otherwise, move to a brand-new chat state.
+    hardResetConversationState();
+  };
+
+  const newChatButton = (
+    <Button
+      onClick={handleNewChat}
+      className="w-full justify-start text-left rounded-xl"
+      variant="ghost"
+      disabled={hasActiveNewChat && sessionId === null && messages.length === 0}
+      title="Start a new chat"
+    >
+      <Plus className="h-4 w-4 mr-2" />
+      New chat
+    </Button>
+  );
 
   return (
     <div className="mx-auto max-w-6xl space-y-4 p-3 sm:space-y-6 sm:p-6">
@@ -216,28 +295,19 @@ export default function Search() {
             >
               <SheetHeader className="p-4 border-b border-border">
                 <SheetTitle className="flex items-center gap-2 text-base">
-                  <MessageSquare className="h-4 w-4" /> Previous Chats
+                  <MessageSquare className="h-4 w-4" /> Chats
                 </SheetTitle>
               </SheetHeader>
-              <div className="p-2 space-y-1">
-                {dummyChats.map((chat) => (
-                  <Button
-                    key={chat.id}
-                    variant="ghost"
-                    className="w-full justify-start text-left rounded-xl hover:bg-primary/10"
-                  >
-                    <span className="truncate w-full block" title={chat.title}>
-                      {chat.title}
-                    </span>
-                  </Button>
-                ))}
-              </div>
+              <div className="p-2 space-y-1">{newChatButton}</div>
             </SheetContent>
           </Sheet>
 
-          <h1 className="text-2xl sm:text-3xl font-bold bg-gradient-primary bg-clip-text text-transparent">
-            Memory Hub
-          </h1>
+          <div className="flex flex-col">
+            <h1 className="text-2xl sm:text-3xl font-bold bg-gradient-primary bg-clip-text text-transparent">
+              Memory Hub
+            </h1>
+            <span className="text-xs text-muted-foreground">{topic}</span>
+          </div>
         </div>
 
         <div className="flex items-center gap-2">
@@ -246,7 +316,7 @@ export default function Search() {
             size="icon"
             className="rounded-xl"
             onClick={handleReset}
-            title="Clear conversation"
+            title="Clear conversation messages (keep session)"
           >
             <Trash2 className="h-5 w-5" />
           </Button>
@@ -258,20 +328,10 @@ export default function Search() {
         {/* Sidebar (hidden on phones) */}
         <div className="hidden md:flex w-64 bg-muted/40 border-r border-border flex-col">
           <div className="p-4 border-b border-border font-semibold flex items-center gap-2">
-            <MessageSquare className="h-4 w-4" /> Previous Chats
+            <MessageSquare className="h-4 w-4" /> Chats
           </div>
           <div className="flex-1 overflow-y-auto p-2 space-y-1">
-            {dummyChats.map((chat) => (
-              <Button
-                key={chat.id}
-                variant="ghost"
-                className="w-full justify-start text-left rounded-xl hover:bg-primary"
-              >
-                <span className="truncate w-full block" title={chat.title}>
-                  {chat.title}
-                </span>
-              </Button>
-            ))}
+            {newChatButton}
           </div>
         </div>
 
