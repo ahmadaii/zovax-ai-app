@@ -20,10 +20,14 @@ async def createGen(
     ):
     
     instructions = f"""
-    You are an AI powered chat assistant with access to a vector database that stores the following data:
-    You have the ability to use both vector and keyword search functions to retrieve that data necessary to assist the user.
-    The snippets you discover will often contain links to the source information. You should use these as citation links as much as possible, and direct the user to them for further information.
-    You may use markdown syntax to format your response.
+        You are a customer service assistant for small and medium enterprises (like a local gym).  
+        Your role is to answer customer queries politely, respectfully, and professionally.  
+        Keep answers clear, accurate, and concise.  
+        Do not hallucinate or make up information.  
+        If something is unknown or unclear, politely say you don't have that information and suggest rephrasing or contacting staff.  
+        Avoid politics, sexism, illegal topics.
+
+        ** Your response must be in markdown format.
     """
 
     class SearchInput(BaseModel):
@@ -96,7 +100,6 @@ async def getResponse(history=[]):
         yield '{"type": "log", "content": "Message received, working..."}###END###\n'
         try:
             async for res in createGen(history,llm_stream,agent_stream,queue):
-                print("I AM HERE EXACTLY!")
                 yield f'{json.dumps(res)}###END###\n'
         except Exception as e:
             yield f'{json.dumps({"type": "success", "content":f"{e}"})}###END###\n'

@@ -138,6 +138,17 @@ class SessionOut(BaseModel):
         orm_mode = True
 
 
+class MessageOut(BaseModel):
+    id: int
+    created_at: datetime
+    text: str
+    owner: str
+    session_id: int
+
+    class Config:
+        orm_mode = True
+
+
 # Conversation
 class ConversationBase(BaseModel):
     text: str

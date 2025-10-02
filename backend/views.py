@@ -13,10 +13,11 @@ from jose import jwt, JWTError, ExpiredSignatureError
 from passlib.context import CryptContext
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy import desc
 
 from common.config import Settings
 from common.db_utils import get_db
-from common.schema import Tenant, User, Session, Conversation, AuthResponse, SignUpRequest, SignInRequest, ConversationRequest,ConversationResponse,SessionOut
+from common.schema import Tenant, User, Session, Conversation, AuthResponse, SignUpRequest, SignInRequest, ConversationRequest, ConversationResponse, SessionOut, MessageOut
 
 from services.chat.callback_manager import (StreamMessagesCallbackHandler, StreamToolUseCallbackHandler)
 from services.chat.chat import createGen
@@ -180,13 +181,101 @@ async def get_sessions(
         raise HTTPException(status_code=404, detail="User not found in this tenant")
 
     # --- Fetch all sessions of the user ---
-    sessions = db.query(Session).filter(Session.user_id == user_id).all()
+    sessions = db.query(Session).filter(Session.user_id == user_id).order_by(desc(Session.created_at)).all()
 
     if not sessions:
         raise HTTPException(status_code=404, detail="No sessions found for this user")
 
     return sessions
-    
+
+
+@session_router.delete("/", response_model=bool)
+async def delete_session(
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: int,   # use proper types if DB uses ints
+    user_id: int,
+    session_id: int,
+    db: Session = Depends(get_db),  # SQLAlchemy session
+):
+    """
+    Delete a single session (and its conversations) for a user within a tenant.
+    """
+
+    # --- Authorization ---
+    if current_user.role != "owner":
+      if current_user.tenant_id != tenant_id or current_user.user_id != user_id:
+          raise HTTPException(status_code=403, detail="Not authorized to delete this session")
+    else:
+      if current_user.tenant_id != tenant_id:
+          raise HTTPException(status_code=403, detail="Not authorized to delete sessions in this tenant")
+
+    # --- Validate user belongs to tenant ---
+    user = (
+        db.query(User)
+        .filter(User.user_id == user_id, User.tenant_id == tenant_id)
+        .first()
+    )
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found in this tenant")
+
+    # --- Scope session to both user and tenant ---
+    session_q = (
+        db.query(Session)
+        .filter(
+            Session.id == session_id,
+            Session.user_id == user_id,
+        )
+    )
+    exists = session_q.first()
+    if not exists:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    # --- Delete children then parent (or rely on ON DELETE CASCADE) ---
+    db.query(Conversation)\
+      .filter(
+          Conversation.session_id == session_id,
+      )\
+      .delete(synchronize_session=False)
+
+    session_q.delete(synchronize_session=False)
+
+    db.commit()
+    return True
+
+
+@session_router.get("/chat",response_model=List[MessageOut])
+async def get_session_messages(
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: str,
+    user_id: str,
+    session_id: str,
+    db: Session = Depends(get_db),
+):
+    """
+    Get all sessions related to a specific user under a tenant.
+    """
+
+    # --- Authorization ---
+    if current_user.role != "owner" and current_user.tenant_id != tenant_id:
+        raise HTTPException(status_code=403, detail="Not authorized to view these sessions")
+
+    # --- Check if the user exists in this tenant ---
+    user = db.query(User).filter(
+        User.user_id == user_id,
+        User.tenant_id == tenant_id
+    ).first()
+
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found in this tenant")
+
+    # --- Fetch all messages of the session ---
+    messages = db.query(Conversation).filter(Conversation.session_id == session_id)
+
+    if not messages:
+        raise HTTPException(status_code=404, detail="No messages found for this session")
+
+    return messages
+
 
 @conversation_router.post("/chat_response") #response_model=ConversationResponse
 async def chat_response(
