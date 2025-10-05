@@ -1,6 +1,6 @@
 import { Outlet, useNavigate, useLocation } from "react-router-dom";
-import { useEffect, useMemo, useState } from "react";
-import { Search, BarChart3, BookOpen, User, LogOut, Menu } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Search, BarChart3, BookOpen, LogOut, Menu } from "lucide-react";
 import { useTenant } from "@/contexts/TenantContext.tsx";
 import {
   Sidebar,
@@ -13,6 +13,7 @@ import {
   SidebarMenuItem,
   SidebarProvider,
   useSidebar,
+  SidebarTrigger,
 } from "@/components/ui/sidebar.tsx";
 import { Button } from "@/components/ui/button.tsx";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar.tsx";
@@ -25,21 +26,9 @@ import {
 } from "@/components/ui/dropdown-menu.tsx";
 
 const navigation = [
-  {
-    title: "Search",
-    icon: Search,
-    url: "/dashboard/search",
-  },
-  {
-    title: "Analytics",
-    icon: BarChart3,
-    url: "/dashboard/analytics",
-  },
-  {
-    title: "Knowledge Base",
-    icon: BookOpen,
-    url: "/dashboard/knowledge-base",
-  },
+  { title: "Search", icon: Search, url: "/dashboard/search" },
+  { title: "Analytics", icon: BarChart3, url: "/dashboard/analytics" },
+  { title: "Knowledge Base", icon: BookOpen, url: "/dashboard/knowledge-base" },
 ];
 
 type LocalUserRecord = {
@@ -60,14 +49,12 @@ function getInitials(name?: string) {
   const parts = name.trim().split(/\s+/);
   const [a, b] = [parts[0], parts[1]];
   const first = a?.[0] ?? "";
-  const second = b?.[0] ?? a?.[1] ?? ""; // fallback to second letter of first name
+  const second = b?.[0] ?? a?.[1] ?? "";
   return (first + second).toUpperCase();
 }
 
-/** Reads 'user' from localStorage and returns { name, email } (reactive to changes across tabs). */
 function useLocalUser() {
   const [u, setU] = useState<{ name?: string; email?: string } | null>(null);
-
   useEffect(() => {
     const read = () => {
       try {
@@ -82,44 +69,98 @@ function useLocalUser() {
         setU(null);
       }
     };
-
     read();
-    // keep in sync if another tab updates localStorage
     const onStorage = (e: StorageEvent) => {
       if (!e.key || e.key === "user") read();
     };
     window.addEventListener("storage", onStorage);
     return () => window.removeEventListener("storage", onStorage);
   }, []);
-
   return u;
+}
+
+/* ------------------ helpers for shadcn sidebar state ------------------ */
+function useSidebarState() {
+  const ctx = useSidebar() as any;
+  const isCollapsed =
+    typeof ctx?.state === "string"
+      ? ctx.state === "collapsed"
+      : typeof ctx?.open === "boolean"
+      ? !ctx.open
+      : false;
+
+  const setCollapsed = (collapsed: boolean) => {
+    if (typeof ctx?.state === "string") {
+      if (
+        (collapsed && ctx.state !== "collapsed") ||
+        (!collapsed && ctx.state !== "expanded")
+      ) {
+        ctx?.toggleSidebar?.();
+      }
+    } else if (typeof ctx?.open === "boolean") {
+      if ((collapsed && ctx.open) || (!collapsed && !ctx.open))
+        ctx?.toggleSidebar?.();
+    } else {
+      ctx?.toggleSidebar?.();
+    }
+  };
+
+  return {
+    isCollapsed,
+    setCollapsed,
+    toggle: ctx?.toggleSidebar ?? (() => {}),
+  };
 }
 
 function DashboardSidebar() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { toggleSidebar } = useSidebar();
-  const { currentTenant } = useTenant();
+  const { isCollapsed, setCollapsed, toggle } = useSidebarState();
+
+  // If the user expands manually, pin open and stop auto-collapse
+  const [pinnedOpen, setPinnedOpen] = useState<boolean>(() => {
+    return localStorage.getItem("sidebar:pinned-open") === "true";
+  });
+
+  const onToggleClick = () => {
+    const nextCollapsed = !isCollapsed;
+    setCollapsed(nextCollapsed);
+    if (nextCollapsed) {
+      localStorage.setItem("sidebar:pinned-open", "false");
+      setPinnedOpen(false);
+    } else {
+      localStorage.setItem("sidebar:pinned-open", "true");
+      setPinnedOpen(true);
+    }
+  };
+
+  // Auto-collapse to icon rail when a chat message is sent — unless pinned open
+  useEffect(() => {
+    const handler = () => {
+      if (!pinnedOpen) setCollapsed(true);
+    };
+    window.addEventListener("chat:messageSent", handler);
+    return () => window.removeEventListener("chat:messageSent", handler);
+  }, [pinnedOpen, setCollapsed]);
 
   return (
-    <Sidebar className="border-r border-border">
-      <SidebarHeader className="p-4 border-b border-border">
-        <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold bg-gradient-primary bg-clip-text text-transparent">
-            ZOVAX
-          </h1>
-          {/* <Button
-            variant="ghost"
-            size="icon"
-            onClick={toggleSidebar}
-            className="lg:hidden"
-          >
-            <Menu className="h-5 w-5" />
-          </Button> */}
+    <Sidebar
+      /* ensures “collapsed” shows an icon rail instead of disappearing */
+      collapsible="icon"
+      className="border-r border-border w-[240px] data-[state=collapsed]:w-16"
+    >
+      <SidebarHeader className="h-16 border-b border-border">
+        <div className="h-full flex items-center justify-between">
+          {!isCollapsed && (
+            <h1 className="text-xl font-bold bg-gradient-primary bg-clip-text text-transparent">
+              ZOVAX
+            </h1>
+          )}
+          <SidebarTrigger
+            className="rounded-md shrink-0 h-8 w-8"
+            title="Toggle sidebar"
+          />
         </div>
-        {/* <p className="text-sm text-muted-foreground mt-1">
-          {currentTenant?.name || "Loading..."}
-        </p> */}
       </SidebarHeader>
 
       <SidebarContent>
@@ -127,19 +168,27 @@ function DashboardSidebar() {
           <SidebarGroupContent>
             <SidebarMenu>
               {navigation.map((item) => {
-                const isActive = location.pathname === item.url;
+                const active = location.pathname === item.url;
                 return (
                   <SidebarMenuItem key={item.title}>
                     <SidebarMenuButton
                       onClick={() => navigate(item.url)}
+                      /* Keep icons; hide only labels when collapsed */
                       className={`${
-                        isActive
+                        active
                           ? "bg-primary text-primary-foreground"
                           : "hover:bg-muted"
-                      } transition-colors duration-200`}
+                      } transition-colors duration-200 flex items-center ${
+                        isCollapsed ? "justify-center gap-0 px-4" : "gap-2"
+                      }`}
+                      title={item.title} // tooltip when collapsed
                     >
-                      <item.icon className="h-5 w-5" />
-                      <span>{item.title}</span>
+                      {/* ICON — always visible */}
+                      <item.icon className="h-5 w-5 shrink-0" />
+                      {/* LABEL — hidden when collapsed */}
+                      {!isCollapsed && (
+                        <span className="ml-2 truncate">{item.title}</span>
+                      )}
                     </SidebarMenuButton>
                   </SidebarMenuItem>
                 );
@@ -156,9 +205,8 @@ function DashboardHeader() {
   const navigate = useNavigate();
   const location = useLocation();
   const { signOut, currentUser, currentTenant } = useTenant();
-
-  // NEW: read from localStorage
   const localUser = useLocalUser();
+  const { isCollapsed } = useSidebarState();
 
   const getPageTitle = () => {
     if (location.pathname.includes("/search/results/")) return "Search Results";
@@ -186,11 +234,23 @@ function DashboardHeader() {
 
   return (
     <header className="h-16 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-      <div className="flex h-full items-center justify-between px-6">
-        <div className="flex items-center gap-4">
-          <h2 className="text-lg font-semibold">{getPageTitle()}</h2>
+      <div className="relative flex h-full items-center justify-between px-6">
+        <div className="flex items-center gap-3 min-w-0">
+          {/* Show the brand in header when sidebar is collapsed */}
+          <h2 className="text-lg font-semibold truncate">{getPageTitle()}</h2>
         </div>
+        {isCollapsed && (
+          <div
+            className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 select-none"
+            aria-hidden="true"
+          >
+            <span className="font-bold tracking-tight bg-gradient-primary bg-clip-text text-transparent text-2xl">
+              ZOVAX
+            </span>
+          </div>
+        )}
 
+        {/* Right cluster */}
         <div className="flex items-center gap-4">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>

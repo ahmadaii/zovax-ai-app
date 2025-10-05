@@ -1,8 +1,9 @@
 from datetime import datetime, timedelta
 import re, uuid, json, asyncio
+from time import monotonic
 from typing import Optional, Annotated, List
 
-from fastapi import APIRouter, Depends, HTTPException, status, Request, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, status
 
 from jose import JWTError, ExpiredSignatureError, jwt
 from fastapi.security import OAuth2PasswordBearer
@@ -11,15 +12,29 @@ from fastapi.responses import StreamingResponse
 from jose import jwt, JWTError, ExpiredSignatureError
 
 from passlib.context import CryptContext
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session as OrmSession
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy import desc
 
 from common.config import Settings
 from common.db_utils import get_db
-from common.schema import Tenant, User, Session, Conversation, AuthResponse, SignUpRequest, SignInRequest, ConversationRequest, ConversationResponse, SessionOut, MessageOut
-
-from services.chat.callback_manager import (StreamMessagesCallbackHandler, StreamToolUseCallbackHandler)
+from common.schema import (
+    Tenant,
+    User,
+    Session,
+    Conversation,
+    AuthResponse,
+    SignUpRequest,
+    SignInRequest,
+    ConversationRequest,
+    SavePartialRequest,
+    SessionOut,
+    MessageOut,
+)
+from services.chat.callback_manager import (
+    StreamMessagesCallbackHandler,
+    StreamToolUseCallbackHandler
+)
 from services.chat.chat import createGen
 
 settings = Settings()
@@ -277,34 +292,76 @@ async def get_session_messages(
     return messages
 
 
-@conversation_router.post("/chat_response") #response_model=ConversationResponse
+@conversation_router.post("/save_partial")
+def save_partial(req: SavePartialRequest, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    # 1) validate session belongs to user
+    session_obj = db.query(Session).filter(Session.id == req.session_id).first()
+    if not session_obj:
+        raise HTTPException(status_code=404, detail="Session not found")
+    # (optional) if you store tenant_id on Session: check it matches current_user.tenant_id
+    # (optional) if you store user_id on Session: ensure session_obj.user_id == current_user.user_id
+
+    # 2) idempotent upsert by (session_id, client_req_id, owner='assistant')
+    existing = (
+        db.query(Conversation)
+          .filter(Conversation.session_id == req.session_id,
+                  Conversation.owner == "assistant",
+                  Conversation.client_req_id == req.client_req_id)
+          .order_by(Conversation.id.desc())
+          .first()
+    )
+
+    # 3) compose message (FE will already append the tail note; server leaves as-is)
+    text_to_save = req.message
+    status = "cancelled"
+    end_reason = req.reason or "client_abort"
+
+    if existing:
+        if existing.status != "complete":
+            existing.text = text_to_save
+            existing.status = status
+            existing.end_reason = end_reason
+            existing.token_count = len(text_to_save)
+            existing.updated_at = datetime.utcnow()
+            db.add(existing); db.commit(); db.refresh(existing)
+        # if complete, we do nothing (final won the race)
+        conv_id = existing.id
+    else:
+        new_conv = Conversation(
+            session_id=req.session_id,
+            owner="assistant",
+            text=text_to_save,
+            status=status,
+            end_reason=end_reason,
+            token_count=len(text_to_save),
+            client_req_id=req.client_req_id,
+            created_at=datetime.utcnow(),
+            updated_at=datetime.utcnow(),
+        )
+        db.add(new_conv); db.commit(); db.refresh(new_conv)
+        conv_id = new_conv.id
+
+    return {"ok": True, "conversation_id": conv_id}
+
+
+
+@conversation_router.post("/chat_response")
 async def chat_response(
     request: ConversationRequest,
-    current_user: Annotated[User, Depends(get_current_user)],
-    db: Session = Depends(get_db)
+    current_user: User = Depends(get_current_user),
+    db: OrmSession = Depends(get_db),
 ):
-    
-    # 1. Verify that the current user exists in the database
-    #    and that they belong to the tenant provided in the request.
-    #    If not, raise an HTTP 403/404 error.
-    db_user = db.query(User).filter(User.user_id == current_user.user_id).first()
-    if not db_user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found"
-        )
-    if request.tenant_id and db_user.tenant_id != request.tenant_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="User does not belong to this tenant"
-        )
-    
-    # 2. Check if request.session_id is provided:
-    #    - If yes, try to load the existing session from DB.
-    #    - If not found → return 404 (invalid session).
-    #    - If no session_id provided → create a new conversation session
-    #      and store it in DB.
-    session_obj = None
+    """
+    Streams assistant tokens to the client.
+    DB writes:
+      - persist user turn immediately
+      - persist assistant turn ONLY once at the end (final); if FE saved a partial
+        row via /conversation/save_partial with same client_req_id, we "upgrade" it.
+    On abort (navigation): FE should call /conversation/save_partial (single write).
+    """
+
+    # 1) Validate session ownership or create a new session
+    session_obj: Optional[Session] = None
     if request.session_id:
         session_obj = (
             db.query(Session)
@@ -312,107 +369,164 @@ async def chat_response(
             .first()
         )
         if not session_obj:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Session not found"
-            )
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found")
+        # Optional: ensure the session belongs to the current user
+        if session_obj.user_id != current_user.user_id:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
     else:
-        # Create a new session
-        #new_session_id = str(uuid.uuid4())
+        # Create new session with topic as the user's prompt (trimmed)
+        topic_guess = request.message.strip()
+        if len(topic_guess) > 60:
+            topic_guess = topic_guess[:57].rstrip() + "…"
         session_obj = Session(
-            #id=new_session_id,
             user_id=current_user.user_id,
-            #tenant_id=request.tenant_id or db_user.tenant_id,
             created_at=datetime.utcnow(),
             updated_at=datetime.utcnow(),
-            topic=request.message,
-            status="active"
+            topic=topic_guess or "New chat",
+            status="active",
+            message_count=0,
         )
         db.add(session_obj)
         db.commit()
         db.refresh(session_obj)
 
-    # 3. Append the new user message (request.message) 
-    # - as a ConversationTurn (role="user") into the session history.
+    # 2) Persist the user turn immediately
     user_turn = Conversation(
         session_id=session_obj.id,
         owner="user",
         text=request.message,
-        created_at=datetime.utcnow()
+        status="complete",
+        token_count=len(request.message or ""),
+        created_at=datetime.utcnow(),
+        updated_at=datetime.utcnow(),
     )
     db.add(user_turn)
+    # bump message_count (user turn)
+    session_obj.message_count = (session_obj.message_count or 0) + 1
+    session_obj.updated_at = datetime.utcnow()
+    db.add(session_obj)
     db.commit()
     db.refresh(user_turn)
+    db.refresh(session_obj)
 
-    # 4. If session exists and reset_context=False:
-    #    - Load existing conversation history from DB.
-    #    - Otherwise, ignore history and start fresh.
-    conversation_history = []
-    if not request.reset_context:
-        # Load conversation turns linked to this session
-        conversation_history = (
+    # 3) Prepare conversation history (unless reset_context)
+    if request.reset_context:
+        history: List[Dict[str, Any]] = []
+    else:
+        rows: List[Conversation] = (
             db.query(Conversation)
             .filter(Conversation.session_id == session_obj.id)
             .order_by(Conversation.created_at.asc())
             .all()
         )
-    else:
-        # Reset context: clear previous turns (optional)
-        conversation_history = []
-
-    # @TODO : Process history to convert into agent format.
-    # Convert to list of dicts
-    conversation_history_list = [
-        {
-            "type": "human" if conv.owner == "user" else "assistant",
-            "content": conv.text,
-            "metadata": {
-                "id": conv.id,
-                "session_id": conv.session_id,
-                "created_at": conv.created_at.isoformat()
+        history = [
+            {
+                "type": "human" if row.owner == "user" else "assistant",
+                "content": row.text,
+                "metadata": {
+                    "id": row.id,
+                    "session_id": row.session_id,
+                    "created_at": row.created_at.isoformat(),
+                    "status": row.status,
+                    "client_req_id": getattr(row, "client_req_id", None),
+                },
             }
-        }
-        for conv in conversation_history
-    ]
+            for row in rows
+        ]
 
-    #return conversation_history_list
-
-    queue = asyncio.Queue()
+    # 4) Set up your streaming handlers (unchanged)
+    queue: asyncio.Queue = asyncio.Queue()
     llm_stream = StreamMessagesCallbackHandler(queue)
     agent_stream = StreamToolUseCallbackHandler(queue)
 
-    history = [{"role": "user", "content": "hi"}]
+    client_req_id = request.client_req_id  # may be None; FE should send UUID for idempotency
+    SEP = "###END###"
 
     async def generate():
+        # Optional: let client know we started
+        yield f'{json.dumps({"type":"session","session_id": session_obj.id})}{SEP}\n'
+        yield f'{json.dumps({"type": "log", "content": "Message received, working..."})}{SEP}\n'
 
-        assistant_buffer = []
-
-        yield '{"type": "log", "content": "Message received, working..."}###END###\n'
+        assistant_tokens: List[str] = []
         try:
-            skip_first_token = True
-            async for res in createGen(conversation_history_list,llm_stream,agent_stream,queue):
-                if skip_first_token:
-                    skip_first_token = False
-                    yield f'{json.dumps(res)}###END###\n'
+            # Stream from your model/agent
+            async for res in createGen(history, llm_stream, agent_stream, queue):
+                # Normalize the provider output -> plain token string; drop 'first_token'
+                if isinstance(res, dict):
+                    if res.get("type") == "first_token":
+                        continue
+                    token = str(res.get("content", "") or "")
                 else:
-                    assistant_buffer.append(res)
-                    yield f'{json.dumps({"type":"token","content":res})}###END###\n'
+                    token = str(res or "")
 
-            assistant_message = "".join(assistant_buffer)
+                if not token:
+                    continue
 
-            assistant_turn = Conversation(
-                session_id=session_obj.id,
-                owner="assistant",
-                text=assistant_message,
-                created_at=datetime.utcnow()
-            )
-            db.add(assistant_turn)
+                assistant_tokens.append(token)
+                # forward to client as a token event
+                yield f'{json.dumps({"type": "token", "content": token})}{SEP}\n'
+
+            # DONE: assemble final text
+            assistant_message = "".join(assistant_tokens)
+
+            # 5) FINAL SAVE (or upgrade a partial saved by /conversation/save_partial)
+            existing = None
+            if client_req_id:
+                existing = (
+                    db.query(Conversation)
+                    .filter(
+                        Conversation.session_id == session_obj.id,
+                        Conversation.owner == "assistant",
+                        Conversation.client_req_id == client_req_id,
+                    )
+                    .order_by(Conversation.id.desc())
+                    .first()
+                )
+
+            if existing:
+                # Upgrade the partial to complete
+                existing.text = assistant_message
+                existing.status = "complete"
+                existing.end_reason = "done"
+                existing.token_count = len(assistant_message)
+                existing.updated_at = datetime.utcnow()
+                db.add(existing)
+            else:
+                # Insert fresh assistant turn
+                assistant_turn = Conversation(
+                    session_id=session_obj.id,
+                    owner="assistant",
+                    text=assistant_message,
+                    status="complete",
+                    end_reason="done",
+                    token_count=len(assistant_message),
+                    client_req_id=client_req_id,
+                    created_at=datetime.utcnow(),
+                    updated_at=datetime.utcnow(),
+                )
+                db.add(assistant_turn)
+
+            # bump message_count (assistant turn)
+            session_obj.message_count = (session_obj.message_count or 0) + 1
+            session_obj.updated_at = datetime.utcnow()
+            db.add(session_obj)
+
             db.commit()
-            db.refresh(assistant_turn)
 
+        except asyncio.CancelledError:
+            # Client navigated away / aborted fetch; FE will call /conversation/save_partial
+            yield f'{json.dumps({"type": "cancelled", "content": "client_abort"})}{SEP}\n'
+            # No DB write here by design (single-write model)
         except Exception as e:
-            yield f'{json.dumps({"type": "success", "content":f"{e}"})}###END###\n'
-        yield '{"type": "final_token", "content": ""}###END###\n'
+            # Optionally log server-side; keep wire protocol clean
+            yield f'{json.dumps({"type": "error", "content": str(e)})}{SEP}\n'
+            # You could also persist an error-row if you want a single DB write here.
+        finally:
+            yield f'{json.dumps({"type": "final_token", "content": ""})}{SEP}\n'
+    
+    headers = {
+        "X-Session-Id": str(session_obj.id),
+        "Access-Control-Expose-Headers": "X-Session-Id",
+    }
 
-    return StreamingResponse(generate(), media_type="application/json")
-
+    return StreamingResponse(generate(), media_type="application/json", headers=headers)

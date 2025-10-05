@@ -1,7 +1,8 @@
 from datetime import datetime
 from typing import Optional, List, Literal, Dict, Any
 from pydantic import BaseModel, EmailStr, Field
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey
+import sqlalchemy as sa
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text
 from sqlalchemy.orm import relationship, declarative_base
 
 Base = declarative_base()
@@ -53,10 +54,17 @@ class Conversation(Base):
     __tablename__ = "conversations"
     id = Column(Integer, primary_key=True, index=True)
     created_at = Column(DateTime, default=datetime.utcnow)
-    text = Column(String, nullable=False)
-    owner = Column(String, nullable=False)
-    session_id = Column(Integer, ForeignKey("sessions.id"))
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
+    text = Column(Text, nullable=False)
+    owner = Column(String, nullable=False)
+    status = Column(String, nullable=False, default="complete", server_default=sa.text("'complete'"))
+    token_count = Column(Integer, nullable=False, default=0, server_default=sa.text("0"))
+
+    client_req_id = Column(String(64), index=True, nullable=True)
+    end_reason    = Column(String(32), nullable=True)
+
+    session_id = Column(Integer, ForeignKey("sessions.id"))
     session = relationship("Session", back_populates="conversations")
 
 
@@ -244,6 +252,7 @@ class ConversationRequest(BaseModel):
         default=False,
         description="If true, ignore provided history and start fresh."
     )
+    client_req_id: Optional[str] = None
 
 class ConversationResponse(BaseModel):
     session_id: str = Field(..., description="Conversation session ID")
@@ -257,3 +266,8 @@ class ConversationResponse(BaseModel):
     content: str = Field(..., description="Payload for this event (empty string for first_token/final_token)")
 
 
+class SavePartialRequest(BaseModel):
+    session_id: int
+    message: str
+    client_req_id: str
+    reason: Optional[str] = "client_abort"
