@@ -30,10 +30,51 @@ export function ChatMessages({
     scrollToBottom();
   }, [messages, scrollToBottom]);
 
+  // Mobile keyboard handling: when keyboard closes visualViewport height grows -> scroll bottom
+  React.useEffect(() => {
+    const vv = (window as any).visualViewport as VisualViewport | undefined;
+    if (!vv) return; // older browsers
+    let lastHeight = vv.height;
+    const THRESHOLD = 60; // px change to treat as keyboard close
+    const onResize = () => {
+      const increased = vv.height - lastHeight;
+      if (increased > THRESHOLD) {
+        // keyboard likely closed
+        requestAnimationFrame(() => scrollToBottom(false));
+      }
+      lastHeight = vv.height;
+    };
+    vv.addEventListener("resize", onResize);
+    return () => vv.removeEventListener("resize", onResize);
+  }, [scrollToBottom]);
+
+  // Fallback: on window blur/focusout (input loses focus) schedule scroll
+  React.useEffect(() => {
+    const onFocusOut = (e: Event) => {
+      const target = e.target as HTMLElement | null;
+      if (
+        target &&
+        (target.tagName === "INPUT" || target.tagName === "TEXTAREA")
+      ) {
+        setTimeout(() => scrollToBottom(false), 80);
+      }
+    };
+    window.addEventListener("focusout", onFocusOut, true);
+    return () => window.removeEventListener("focusout", onFocusOut, true);
+  }, [scrollToBottom]);
+
+  React.useEffect(() => {
+    // Existing visualViewport + focusout logic kept.
+    const restoreOnCustom = () => scrollToBottom(false);
+    window.addEventListener("chat:restoreScroll", restoreOnCustom);
+    return () =>
+      window.removeEventListener("chat:restoreScroll", restoreOnCustom);
+  }, [scrollToBottom]);
+
   return (
     <div
       ref={scrollRef}
-      className="relative flex-1 overflow-y-auto overscroll-contain px-4 sm:px-6 py-4 sm:py-6 h-full"
+      className="relative flex-1 overflow-y-auto overscroll-contain px-4 sm:px-6 py-4 sm:py-6 h-full pb-24"
     >
       {loading && (
         <div className="absolute inset-0 flex items-center justify-center">
@@ -57,7 +98,9 @@ export function ChatMessages({
         {messages.map((m) => {
           const base =
             `min-w-0 ${
-              focusMode ? "max-w-full" : "max-w-[90%] sm:max-w-[85%]"
+              focusMode
+                ? "max-w-full"
+                : "max-w-[95%] xs:max-w-[90%] sm:max-w-[85%]"
             } ` +
             "rounded-2xl px-3 sm:px-4 py-2.5 sm:py-3 text-sm shadow-sm overflow-hidden";
           const style =

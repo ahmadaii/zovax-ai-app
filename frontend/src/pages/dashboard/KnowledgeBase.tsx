@@ -1,56 +1,93 @@
 import { useState } from "react";
-import { BookOpen, Upload, FileText, Folder, Search, Plus, Filter, Download, Edit, Trash2, Globe, StickyNote } from "lucide-react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card.tsx";
+import {
+  BookOpen,
+  Upload,
+  FileText,
+  Folder,
+  Search,
+  Plus,
+  Filter,
+  Download,
+  Edit,
+  Trash2,
+  Globe,
+  StickyNote,
+} from "lucide-react";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card.tsx";
 import { Button } from "@/components/ui/button.tsx";
 import { Input } from "@/components/ui/input.tsx";
 import { Badge } from "@/components/ui/badge.tsx";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table.tsx";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu.tsx";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table.tsx";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu.tsx";
 import { AddMemoryDialog } from "@/components/AddMemoryDialog.tsx";
 import { useToast } from "@/hooks/use-toast.ts";
 
 // Mock data for knowledge base items
-const mockKnowledgeItems = [{
-  id: 1,
-  title: "WhatsApp Bot Setup Guide",
-  type: "document",
-  category: "Setup",
-  lastModified: "2024-01-15",
-  size: "2.4 MB",
-  author: "Admin"
-}, {
-  id: 2,
-  title: "API Integration Documentation",
-  type: "document",
-  category: "Development",
-  lastModified: "2024-01-14",
-  size: "1.8 MB",
-  author: "Tech Team"
-}, {
-  id: 3,
-  title: "Customer Support Templates",
-  type: "template",
-  category: "Support",
-  lastModified: "2024-01-13",
-  size: "856 KB",
-  author: "Support Team"
-}, {
-  id: 4,
-  title: "Feature Release Notes",
-  type: "document",
-  category: "Updates",
-  lastModified: "2024-01-12",
-  size: "1.2 MB",
-  author: "Product Team"
-}, {
-  id: 5,
-  title: "Troubleshooting FAQ",
-  type: "faq",
-  category: "Support",
-  lastModified: "2024-01-11",
-  size: "3.1 MB",
-  author: "Support Team"
-}];
+const mockKnowledgeItems = [
+  {
+    id: 1,
+    title: "WhatsApp Bot Setup Guide",
+    type: "document",
+    category: "Setup",
+    lastModified: "2024-01-15",
+    size: "2.4 MB",
+    author: "Admin",
+  },
+  {
+    id: 2,
+    title: "API Integration Documentation",
+    type: "document",
+    category: "Development",
+    lastModified: "2024-01-14",
+    size: "1.8 MB",
+    author: "Tech Team",
+  },
+  {
+    id: 3,
+    title: "Customer Support Templates",
+    type: "template",
+    category: "Support",
+    lastModified: "2024-01-13",
+    size: "856 KB",
+    author: "Support Team",
+  },
+  {
+    id: 4,
+    title: "Feature Release Notes",
+    type: "document",
+    category: "Updates",
+    lastModified: "2024-01-12",
+    size: "1.2 MB",
+    author: "Product Team",
+  },
+  {
+    id: 5,
+    title: "Troubleshooting FAQ",
+    type: "faq",
+    category: "Support",
+    lastModified: "2024-01-11",
+    size: "3.1 MB",
+    author: "Support Team",
+  },
+];
 const categories = ["All", "Setup", "Development", "Support", "Updates"];
 export default function KnowledgeBase() {
   const [searchQuery, setSearchQuery] = useState("");
@@ -59,9 +96,12 @@ export default function KnowledgeBase() {
   const [isAddMemoryOpen, setIsAddMemoryOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<any>(null);
   const { toast } = useToast();
-  const filteredItems = knowledgeItems.filter(item => {
-    const matchesSearch = item.title.toLowerCase().includes(searchQuery.toLowerCase()) || item.category.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesCategory = selectedCategory === "All" || item.category === selectedCategory;
+  const filteredItems = knowledgeItems.filter((item) => {
+    const matchesSearch =
+      item.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      item.category.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesCategory =
+      selectedCategory === "All" || item.category === selectedCategory;
     return matchesSearch && matchesCategory;
   });
   const getTypeIcon = (type: string) => {
@@ -98,18 +138,22 @@ export default function KnowledgeBase() {
   };
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric'
+    return date.toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
     });
   };
   const handleAddMemory = (newMemory: any) => {
     if (editingItem) {
       // Update existing item
-      setKnowledgeItems(prev => prev.map(item => 
-        item.id === editingItem.id ? { ...newMemory, id: editingItem.id } : item
-      ));
+      setKnowledgeItems((prev) =>
+        prev.map((item) =>
+          item.id === editingItem.id
+            ? { ...newMemory, id: editingItem.id }
+            : item
+        )
+      );
       setEditingItem(null);
       toast({
         title: "Memory Updated",
@@ -117,7 +161,7 @@ export default function KnowledgeBase() {
       });
     } else {
       // Add new item
-      setKnowledgeItems(prev => [newMemory, ...prev]);
+      setKnowledgeItems((prev) => [newMemory, ...prev]);
       toast({
         title: "Memory Added",
         description: "New knowledge base item has been successfully added.",
@@ -126,7 +170,7 @@ export default function KnowledgeBase() {
   };
 
   const handleEdit = (id: number) => {
-    const item = knowledgeItems.find(item => item.id === id);
+    const item = knowledgeItems.find((item) => item.id === id);
     if (item) {
       setEditingItem(item);
       setIsAddMemoryOpen(true);
@@ -134,9 +178,9 @@ export default function KnowledgeBase() {
   };
 
   const handleDelete = (id: number) => {
-    const item = knowledgeItems.find(item => item.id === id);
+    const item = knowledgeItems.find((item) => item.id === id);
     if (item) {
-      setKnowledgeItems(prev => prev.filter(item => item.id !== id));
+      setKnowledgeItems((prev) => prev.filter((item) => item.id !== id));
       toast({
         title: "Memory Deleted",
         description: `"${item.title}" has been successfully deleted.`,
@@ -146,7 +190,7 @@ export default function KnowledgeBase() {
   };
 
   const handleDownload = (id: number) => {
-    const item = knowledgeItems.find(item => item.id === id);
+    const item = knowledgeItems.find((item) => item.id === id);
     if (item) {
       // Create mock file content based on type
       let content = "";
@@ -160,12 +204,20 @@ export default function KnowledgeBase() {
           extension = ".txt";
           break;
         case "template":
-          content = `Template: ${item.title}\n\nThis is a sample template that can be used for ${item.category.toLowerCase()} purposes.\n\nCreated by: ${item.author}`;
+          content = `Template: ${
+            item.title
+          }\n\nThis is a sample template that can be used for ${item.category.toLowerCase()} purposes.\n\nCreated by: ${
+            item.author
+          }`;
           mimeType = "text/plain";
           extension = ".txt";
           break;
         case "faq":
-          content = `FAQ: ${item.title}\n\nQ: What is this FAQ about?\nA: This FAQ covers information about ${item.category.toLowerCase()}.\n\nMaintained by: ${item.author}`;
+          content = `FAQ: ${
+            item.title
+          }\n\nQ: What is this FAQ about?\nA: This FAQ covers information about ${item.category.toLowerCase()}.\n\nMaintained by: ${
+            item.author
+          }`;
           mimeType = "text/plain";
           extension = ".txt";
           break;
@@ -182,7 +234,7 @@ export default function KnowledgeBase() {
         a.style.display = "none";
         a.href = url;
         a.download = `${item.title.replace(/[^a-zA-Z0-9]/g, "_")}${extension}`;
-        
+
         document.body.appendChild(a);
         a.click();
         window.URL.revokeObjectURL(url);
@@ -201,35 +253,41 @@ export default function KnowledgeBase() {
       }
     }
   };
-  return <div className="space-y-8">
+  return (
+    <div className="space-y-8">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold bg-gradient-primary bg-clip-text text-transparent">
+          <h1 className="text-2xl sm:text-3xl font-bold bg-gradient-primary bg-clip-text text-transparent">
             Knowledge Base
           </h1>
-          <p className="text-muted-foreground mt-2">
+          <p className="text-sm sm:text-base text-muted-foreground mt-2">
             Manage your documents, templates, and knowledge resources
           </p>
         </div>
-        <Button onClick={() => setIsAddMemoryOpen(true)} className="bg-gradient-primary hover:opacity-90">
+        <Button
+          onClick={() => setIsAddMemoryOpen(true)}
+          className="bg-gradient-primary hover:opacity-90 w-full sm:w-auto"
+        >
           <Plus className="h-4 w-4 mr-2" />
           Add Memory
         </Button>
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 sm:gap-6">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Documents</CardTitle>
+            <CardTitle className="text-sm font-medium">
+              Total Documents
+            </CardTitle>
             <FileText className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{knowledgeItems.length}</div>
           </CardContent>
         </Card>
-        
+
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Categories</CardTitle>
@@ -267,7 +325,13 @@ export default function KnowledgeBase() {
           <div className="flex flex-col sm:flex-row gap-4">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
-              <Input type="text" placeholder="Search documents, templates, and FAQs..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="pl-10" />
+              <Input
+                type="text"
+                placeholder="Search documents, templates, and FAQs..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-10"
+              />
             </div>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -277,12 +341,16 @@ export default function KnowledgeBase() {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent>
-                {categories.map(category => <DropdownMenuItem key={category} onClick={() => setSelectedCategory(category)}>
+                {categories.map((category) => (
+                  <DropdownMenuItem
+                    key={category}
+                    onClick={() => setSelectedCategory(category)}
+                  >
                     {category}
-                  </DropdownMenuItem>)}
+                  </DropdownMenuItem>
+                ))}
               </DropdownMenuContent>
             </DropdownMenu>
-            
           </div>
         </CardContent>
       </Card>
@@ -290,61 +358,80 @@ export default function KnowledgeBase() {
       {/* Knowledge Base Table */}
       <Card>
         <CardHeader>
-          <CardTitle>Documents & Resources</CardTitle>
-          <CardDescription>
+          <CardTitle className="text-lg sm:text-xl">
+            Documents & Resources
+          </CardTitle>
+          <CardDescription className="text-xs sm:text-sm">
             {filteredItems.length} of {knowledgeItems.length} items
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Title</TableHead>
-                <TableHead>Type</TableHead>
-                <TableHead>Category</TableHead>
-                <TableHead>Author</TableHead>
-                <TableHead>Size</TableHead>
-                <TableHead>Last Modified</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredItems.map(item => <TableRow key={item.id}>
-                  <TableCell>
-                    <div className="flex items-center gap-3">
-                      {getTypeIcon(item.type)}
-                      <span className="font-medium">{item.title}</span>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <Badge className={getTypeBadgeColor(item.type)}>
-                      {item.type}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>{item.category}</TableCell>
-                  <TableCell>{item.author}</TableCell>
-                  <TableCell>{item.size}</TableCell>
-                  <TableCell>{formatDate(item.lastModified)}</TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex justify-end gap-2">
-                      <Button variant="ghost" size="sm" onClick={() => handleDownload(item.id)}>
-                        <Download className="h-4 w-4" />
-                      </Button>
-                      <Button variant="ghost" size="sm" onClick={() => handleEdit(item.id)}>
-                        <Edit className="h-4 w-4" />
-                      </Button>
-                      <Button variant="ghost" size="sm" onClick={() => handleDelete(item.id)} className="text-destructive hover:text-destructive">
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>)}
-            </TableBody>
-          </Table>
+          <div className="overflow-x-auto -mx-2 sm:mx-0">
+            <Table className="min-w-[760px] sm:min-w-0">
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Title</TableHead>
+                  <TableHead>Type</TableHead>
+                  <TableHead>Category</TableHead>
+                  <TableHead>Author</TableHead>
+                  <TableHead>Size</TableHead>
+                  <TableHead>Last Modified</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredItems.map((item) => (
+                  <TableRow key={item.id}>
+                    <TableCell>
+                      <div className="flex items-center gap-3">
+                        {getTypeIcon(item.type)}
+                        <span className="font-medium">{item.title}</span>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <Badge className={getTypeBadgeColor(item.type)}>
+                        {item.type}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>{item.category}</TableCell>
+                    <TableCell>{item.author}</TableCell>
+                    <TableCell>{item.size}</TableCell>
+                    <TableCell>{formatDate(item.lastModified)}</TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex justify-end gap-2">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleDownload(item.id)}
+                        >
+                          <Download className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleEdit(item.id)}
+                        >
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleDelete(item.id)}
+                          className="text-destructive hover:text-destructive"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
         </CardContent>
       </Card>
 
-      <AddMemoryDialog 
+      <AddMemoryDialog
         open={isAddMemoryOpen}
         onOpenChange={(open) => {
           setIsAddMemoryOpen(open);
@@ -355,5 +442,6 @@ export default function KnowledgeBase() {
         onAddMemory={handleAddMemory}
         editingItem={editingItem}
       />
-    </div>;
+    </div>
+  );
 }

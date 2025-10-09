@@ -1,7 +1,15 @@
 import { Outlet, useNavigate, useLocation } from "react-router-dom";
 import { useEffect, useState } from "react";
-import { Search, BarChart3, BookOpen, LogOut, Menu } from "lucide-react";
+import {
+  Search,
+  BarChart3,
+  BookOpen,
+  LogOut,
+  Menu,
+  EllipsisVertical,
+} from "lucide-react";
 import { useTenant } from "@/contexts/TenantContext.tsx";
+import { useIsMobile } from "@/hooks/use-mobile.tsx";
 import {
   Sidebar,
   SidebarContent,
@@ -115,7 +123,9 @@ function useSidebarState() {
 function DashboardSidebar() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { isCollapsed, setCollapsed, toggle } = useSidebarState();
+  const { isCollapsed, setCollapsed } = useSidebarState();
+  const isMobile = useIsMobile();
+  const rawSidebar: any = useSidebar();
 
   // If the user expands manually, pin open and stop auto-collapse
   const [pinnedOpen, setPinnedOpen] = useState<boolean>(() => {
@@ -136,12 +146,13 @@ function DashboardSidebar() {
 
   // Auto-collapse to icon rail when a chat message is sent — unless pinned open
   useEffect(() => {
+    if (isMobile) return; // do NOT auto-toggle on mobile
     const handler = () => {
       if (!pinnedOpen) setCollapsed(true);
     };
     window.addEventListener("chat:messageSent", handler);
     return () => window.removeEventListener("chat:messageSent", handler);
-  }, [pinnedOpen, setCollapsed]);
+  }, [pinnedOpen, setCollapsed, isMobile]);
 
   return (
     <Sidebar
@@ -159,7 +170,9 @@ function DashboardSidebar() {
           <SidebarTrigger
             className="rounded-md shrink-0 h-8 w-8"
             title="Toggle sidebar"
-          />
+          >
+            <EllipsisVertical className="h-5 w-5" />
+          </SidebarTrigger>
         </div>
       </SidebarHeader>
 
@@ -172,8 +185,13 @@ function DashboardSidebar() {
                 return (
                   <SidebarMenuItem key={item.title}>
                     <SidebarMenuButton
-                      onClick={() => navigate(item.url)}
-                      /* Keep icons; hide only labels when collapsed */
+                      onClick={() => {
+                        navigate(item.url);
+                        // Only auto-close on mobile. Desktop stays open.
+                        if (isMobile) {
+                          rawSidebar?.setOpenMobile?.(false);
+                        }
+                      }}
                       className={`${
                         active
                           ? "bg-primary text-primary-foreground"
@@ -181,11 +199,10 @@ function DashboardSidebar() {
                       } transition-colors duration-200 flex items-center ${
                         isCollapsed ? "justify-center gap-0 px-4" : "gap-2"
                       }`}
-                      title={item.title} // tooltip when collapsed
+                      title={item.title}
+                      aria-current={active ? "page" : undefined}
                     >
-                      {/* ICON — always visible */}
                       <item.icon className="h-5 w-5 shrink-0" />
-                      {/* LABEL — hidden when collapsed */}
                       {!isCollapsed && (
                         <span className="ml-2 truncate">{item.title}</span>
                       )}
@@ -204,7 +221,7 @@ function DashboardSidebar() {
 function DashboardHeader() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { signOut, currentUser, currentTenant } = useTenant();
+  const { signOut } = useTenant();
   const localUser = useLocalUser();
   const { isCollapsed } = useSidebarState();
 
@@ -227,31 +244,35 @@ function DashboardHeader() {
     navigate("/");
   };
 
-  const displayName = localUser?.name || currentUser?.name || "User";
-  const displayEmail =
-    localUser?.email || currentUser?.email || "user@example.com";
+  const displayName = localUser?.name || "User";
+  const displayEmail = localUser?.email || "user@example.com";
   const initials = getInitials(displayName);
 
   return (
-    <header className="h-16 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-      <div className="relative flex h-full items-center justify-between px-6">
-        <div className="flex items-center gap-3 min-w-0">
-          {/* Show the brand in header when sidebar is collapsed */}
-          <h2 className="text-lg font-semibold truncate">{getPageTitle()}</h2>
+    <header className="h-14 sm:h-16 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-30">
+      <div className="relative flex h-full items-center justify-between px-4 sm:px-6">
+        <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+          {/* Mobile sidebar trigger */}
+          <SidebarTrigger className="md:hidden h-8 w-8">
+            <EllipsisVertical className="h-5 w-5" />
+          </SidebarTrigger>
+          <h2 className="text-base sm:text-lg font-semibold truncate">
+            {getPageTitle()}
+          </h2>
         </div>
         {isCollapsed && (
           <div
             className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 select-none"
             aria-hidden="true"
           >
-            <span className="font-bold tracking-tight bg-gradient-primary bg-clip-text text-transparent text-2xl">
+            <span className="font-bold tracking-tight bg-gradient-primary bg-clip-text text-transparent text-lg sm:text-2xl">
               ZOVAX
             </span>
           </div>
         )}
 
         {/* Right cluster */}
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-2 sm:gap-4">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" className="relative h-8 w-8 rounded-full">
@@ -268,9 +289,6 @@ function DashboardHeader() {
                   <p className="font-medium">{displayName}</p>
                   <p className="text-xs text-muted-foreground">
                     {displayEmail}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    {currentTenant?.name}
                   </p>
                 </div>
               </div>
@@ -292,9 +310,9 @@ export default function DashboardLayout() {
     <SidebarProvider>
       <div className="min-h-screen flex w-full bg-background">
         <DashboardSidebar />
-        <div className="flex-1 flex flex-col">
+        <div className="flex-1 flex flex-col min-w-0">
           <DashboardHeader />
-          <main className="flex-1 p-6">
+          <main className="flex-1 p-4 sm:p-6">
             <Outlet />
           </main>
         </div>

@@ -1,8 +1,14 @@
 import type { Config } from "tailwindcss";
+import animate from "tailwindcss-animate";
 
-export default {
+const config: Config = {
   darkMode: ["class"],
-  content: ["./pages/**/*.{ts,tsx}", "./components/**/*.{ts,tsx}", "./app/**/*.{ts,tsx}", "./src/**/*.{ts,tsx}"],
+  content: [
+    "./pages/**/*.{ts,tsx}",
+    "./components/**/*.{ts,tsx}",
+    "./app/**/*.{ts,tsx}",
+    "./src/**/*.{ts,tsx}",
+  ],
   prefix: "",
   theme: {
     container: {
@@ -13,6 +19,9 @@ export default {
       },
     },
     extend: {
+      screens: {
+        xs: "420px",
+      },
       colors: {
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
@@ -59,17 +68,17 @@ export default {
         },
       },
       backgroundImage: {
-        'gradient-primary': 'var(--gradient-primary)',
-        'gradient-secondary': 'var(--gradient-secondary)',
-        'gradient-hero': 'var(--gradient-hero)',
+        "gradient-primary": "var(--gradient-primary)",
+        "gradient-secondary": "var(--gradient-secondary)",
+        "gradient-hero": "var(--gradient-hero)",
       },
       boxShadow: {
-        'glow-primary': 'var(--glow-primary)',
-        'glow-secondary': 'var(--glow-secondary)',
+        "glow-primary": "var(--glow-primary)",
+        "glow-secondary": "var(--glow-secondary)",
       },
       transitionTimingFunction: {
-        'smooth': 'var(--transition-smooth)',
-        'spring': 'var(--transition-spring)',
+        smooth: "var(--transition-smooth)",
+        spring: "var(--transition-spring)",
       },
       borderRadius: {
         lg: "var(--radius)",
@@ -93,7 +102,7 @@ export default {
             height: "0",
           },
         },
-        "float": {
+        float: {
           "0%, 100%": { transform: "translateY(0px)" },
           "50%": { transform: "translateY(-20px)" },
         },
@@ -101,7 +110,7 @@ export default {
           "0%": { opacity: "0", transform: "translateY(20px)" },
           "100%": { opacity: "1", transform: "translateY(0)" },
         },
-        "glow": {
+        glow: {
           "0%, 100%": { boxShadow: "var(--glow-secondary)" },
           "50%": { boxShadow: "var(--glow-primary)" },
         },
@@ -109,11 +118,13 @@ export default {
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
-        "float": "float 6s ease-in-out infinite",
+        float: "float 6s ease-in-out infinite",
         "fade-in": "fade-in 0.8s ease-out",
-        "glow": "glow 3s ease-in-out infinite",
+        glow: "glow 3s ease-in-out infinite",
       },
     },
   },
-  plugins: [require("tailwindcss-animate")],
-} satisfies Config;
+  plugins: [animate],
+};
+
+export default config;

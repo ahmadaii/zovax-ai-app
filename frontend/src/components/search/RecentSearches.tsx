@@ -55,11 +55,11 @@ export function RecentSearches({
     <div className="max-w-6xl mx-auto">
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
+          <CardTitle className="flex items-center gap-2 text-lg sm:text-xl">
             <Calendar className="h-5 w-5" />
             Recent Searches
           </CardTitle>
-          <CardDescription>
+          <CardDescription className="text-xs sm:text-sm">
             Your recent search history and conversations
           </CardDescription>
         </CardHeader>
@@ -90,57 +90,59 @@ export function RecentSearches({
               </p>
             </div>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Chat Title</TableHead>
-                  <TableHead>Search Query</TableHead>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filtered.map((search) => (
-                  <TableRow key={search.id}>
-                    <TableCell className="font-medium">
-                      {search.chatTitle}
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {search.searchQuery}
-                    </TableCell>
-                    <TableCell>{formatDate(search.date)}</TableCell>
-                    <TableCell>
-                      <Badge
-                        variant="secondary"
-                        className="bg-green-100 text-green-800"
-                      >
-                        {search.status}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex justify-end gap-2">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => onView(search.id)}
-                        >
-                          <Eye className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => onDelete(search.id)}
-                          className="text-destructive hover:text-destructive"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </TableCell>
+            <div className="overflow-x-auto -mx-2 sm:mx-0">
+              <Table className="min-w-[640px] sm:min-w-0">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Chat Title</TableHead>
+                    <TableHead>Search Query</TableHead>
+                    <TableHead>Date</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {filtered.map((search) => (
+                    <TableRow key={search.id}>
+                      <TableCell className="font-medium">
+                        {search.chatTitle}
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {search.searchQuery}
+                      </TableCell>
+                      <TableCell>{formatDate(search.date)}</TableCell>
+                      <TableCell>
+                        <Badge
+                          variant="secondary"
+                          className="bg-green-100 text-green-800"
+                        >
+                          {search.status}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex justify-end gap-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => onView(search.id)}
+                          >
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => onDelete(search.id)}
+                            className="text-destructive hover:text-destructive"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
           )}
         </CardContent>
       </Card>

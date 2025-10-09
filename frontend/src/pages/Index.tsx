@@ -129,9 +129,9 @@ const Index = () => {
     }
   };
   return (
-    <div className="min-h-screen bg-background flex">
+    <div className="min-h-screen bg-background flex flex-col lg:flex-row">
       {/* Left Side - Authentication */}
-      <div className="w-full lg:w-2/5 flex items-center justify-center p-8">
+      <div className="w-full lg:w-2/5 flex items-center justify-center p-6 sm:p-8 order-2 lg:order-1">
         <div className="w-full max-w-md space-y-8">
           {/* ZOVAX Logo */}
           <div className="text-center">
@@ -139,15 +139,15 @@ const Index = () => {
               <img
                 src={brainIcon}
                 alt="ZOVAX AI Brain Icon"
-                className="w-16 h-16 mx-auto mb-2"
+                className="w-14 h-14 sm:w-16 sm:h-16 mx-auto mb-2"
               />
             </div>
-            <p className="text-muted-foreground mt-2">
+            <p className="text-muted-foreground mt-2 text-sm sm:text-base">
               {activeTab === "signin"
                 ? "Welcome back to ZOVAX"
                 : "Welcome to ZOVAX"}
             </p>
-            <p className="text-sm text-muted-foreground mt-1">
+            <p className="text-xs sm:text-sm text-muted-foreground mt-1">
               Automate your customer conversations
             </p>
           </div>
@@ -158,13 +158,13 @@ const Index = () => {
             onValueChange={setActiveTab}
             className="w-full"
           >
-            <TabsList className="grid w-full grid-cols-2">
+            <TabsList className="grid w-full grid-cols-2 text-xs sm:text-sm">
               <TabsTrigger value="signin">Sign In</TabsTrigger>
               <TabsTrigger value="signup">Sign Up</TabsTrigger>
             </TabsList>
 
             {/* Sign In Form */}
-            <TabsContent value="signin" className="mt-6">
+            <TabsContent value="signin" className="mt-4 sm:mt-6">
               <Form {...signInForm}>
                 <form
                   onSubmit={signInForm.handleSubmit(onSignIn)}
@@ -219,7 +219,7 @@ const Index = () => {
             </TabsContent>
 
             {/* Sign Up Form */}
-            <TabsContent value="signup" className="mt-6">
+            <TabsContent value="signup" className="mt-4 sm:mt-6">
               <Form {...signUpForm}>
                 <form
                   onSubmit={signUpForm.handleSubmit(onSignUp)}
@@ -363,29 +363,29 @@ const Index = () => {
         </div>
       </div>
 
-      {/* Right Side - WhatsApp Business Bot */}
-      <div className="hidden lg:flex lg:w-3/5 bg-gradient-hero items-center justify-center p-8">
-        <div className="max-w-2xl text-center space-y-8">
+      {/* Right Side - WhatsApp Business Bot (hidden on small) */}
+      <div className="w-full lg:w-3/5 bg-gradient-hero items-center justify-center p-6 sm:p-8 flex order-1 lg:order-2 min-h-[40vh] lg:min-h-0">
+        <div className="max-w-2xl text-center space-y-6 sm:space-y-8">
           <div>
-            <h2 className="text-3xl font-bold text-foreground mb-4">
+            <h2 className="text-2xl sm:text-3xl font-bold text-foreground mb-3 sm:mb-4">
               Automate Your Business with WhatsApp
             </h2>
-            <p className="text-muted-foreground text-lg">
+            <p className="text-muted-foreground text-sm sm:text-lg">
               Streamline customer service with intelligent WhatsApp automation
             </p>
           </div>
 
           {/* ZOVAX Logo Hero */}
-          <div className="w-full max-w-lg">
+          <div className="w-full max-w-xs sm:max-w-lg mx-auto">
             <img
               src={zovaxLogo}
               alt="ZOVAX - Intelligent automation platform"
-              className="w-full h-auto max-w-md mx-auto drop-shadow-lg"
+              className="w-full h-auto drop-shadow-lg"
             />
           </div>
 
-          <div className="mt-8 space-y-4">
-            <h3 className="text-xl font-semibold text-foreground mb-2">
+          <div className="mt-4 sm:mt-8 space-y-2 sm:space-y-4">
+            <h3 className="text-lg sm:text-xl font-semibold text-foreground mb-1 sm:mb-2">
               Transform Your Customer Experience
             </h3>
           </div>

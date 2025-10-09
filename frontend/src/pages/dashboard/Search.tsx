@@ -9,6 +9,7 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
+import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { useTenant } from "@/contexts/TenantContext";
 import { SIGNIN_PATH } from "@/lib/endpoints";
 import { useChat } from "@/hooks/useChats";
@@ -17,6 +18,7 @@ import { RecentSearches } from "@/components/search/RecentSearches";
 import { ChatMessages } from "@/components/chat/ChatMessages";
 import { ChatComposer } from "@/components/chat/ChatComposer";
 import { ChatsSidebar } from "@/components/sidebar/ChatsSidebar";
+import { Menu } from "lucide-react";
 
 export default function Search() {
   const { ready, user, token, signOut } = useTenant();
@@ -34,7 +36,7 @@ export default function Search() {
     inFlight,
     sessionId,
     topic,
-    hasActiveNewChat, // NEW: use to disable button
+    hasActiveNewChat,
     sessions,
     sessionsLoading,
     sessionsError,
@@ -47,6 +49,7 @@ export default function Search() {
   } = useChat({ ready, user, token, onAuthError });
 
   const [focusMode, setFocusMode] = React.useState(false);
+  const [mobileSheetOpen, setMobileSheetOpen] = React.useState(false);
 
   React.useEffect(() => {
     fetchSessions();
@@ -56,7 +59,6 @@ export default function Search() {
     if (sessionId) fetchSessions();
   }, [sessionId, fetchSessions]);
 
-  // Mock recent searches (replace with real data when backend is ready)
   const mockRecentSearches: RecentSearch[] = [
     {
       id: 1,
@@ -111,104 +113,119 @@ export default function Search() {
   const newChatDisabled = hasActiveNewChat && sessionId === null;
 
   return (
-    <div className="mx-auto max-w-6xl space-y-4 p-3 sm:space-y-6 sm:p-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          {/* Mobile drawer trigger (opens Chats) */}
-          <Sheet>
-            <SheetTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="md:hidden rounded-xl"
-                title="Open Chats"
-              >
-                <MessageSquare className="h-5 w-5" />
-              </Button>
-            </SheetTrigger>
-            <SheetContent
-              side="left"
-              className="w-[85vw] sm:w-[380px] p-0 border-r border-border bg-muted/40"
-            >
-              <SheetHeader className="p-4 border-b border-border">
-                <SheetTitle className="flex items-center gap-2 text-base">
-                  <MessageSquare className="h-4 w-4" /> Chats
-                </SheetTitle>
-              </SheetHeader>
-              <div className="flex-1 overflow-y-auto">
-                <ChatsSidebar
-                  focusMode={false}
-                  setFocusMode={() => {}}
-                  sessions={sessions}
-                  sessionsLoading={sessionsLoading}
-                  sessionsError={sessionsError}
-                  sessionId={sessionId}
-                  onNewChat={newChat}
-                  onOpenSession={openSession}
-                  onDeleteSession={deleteSessionById}
-                  newChatDisabled={newChatDisabled} // NEW
-                />
-              </div>
-            </SheetContent>
-          </Sheet>
-          <div className="flex items-center gap-3">
-            <h1 className="text-2xl sm:text-3xl font-bold bg-gradient-primary bg-clip-text text-transparent">
-              {"Memory Hub"}
-            </h1>
+    <div className="mx-auto max-w-6xl space-y-6 p-3 sm:p-6">
+      {/* Chat / Memory Hub Card */}
+      <Card>
+        <CardHeader className="p-3 pb-2 md:hidden">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              {/* Mobile conversation history trigger */}
+              <Sheet open={mobileSheetOpen} onOpenChange={setMobileSheetOpen}>
+                <SheetTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="md:hidden rounded-lg h-9 w-9"
+                    title="Open conversations"
+                    aria-label="Open conversations"
+                  >
+                    <Menu className="h-5 w-5" />
+                  </Button>
+                </SheetTrigger>
+                <SheetContent
+                  side="left"
+                  hideClose
+                  className="p-0 border-r border-border bg-sidebar flex flex-col w-[18rem] max-w-[90vw]"
+                >
+                  <SheetHeader className="p-4 border-b border-border flex flex-row items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="text-lg font-bold bg-gradient-primary bg-clip-text text-transparent">
+                        ZOVAX
+                      </span>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 rounded-md"
+                      title="Close chats sidebar"
+                      aria-label="Close chats sidebar"
+                      onClick={() => setMobileSheetOpen(false)}
+                    >
+                      <Menu className="h-5 w-5" />
+                    </Button>
+                  </SheetHeader>
+                  <div className="flex-1 overflow-y-auto min-h-0">
+                    <ChatsSidebar
+                      mobile
+                      focusMode={false}
+                      setFocusMode={() => {}}
+                      sessions={sessions}
+                      sessionsLoading={sessionsLoading}
+                      sessionsError={sessionsError}
+                      sessionId={sessionId}
+                      onNewChat={() => {
+                        newChat();
+                        setMobileSheetOpen(false);
+                      }}
+                      onOpenSession={(s) => {
+                        openSession(s);
+                        setMobileSheetOpen(false);
+                      }}
+                      onDeleteSession={deleteSessionById}
+                      newChatDisabled={newChatDisabled}
+                    />
+                  </div>
+                </SheetContent>
+              </Sheet>
+            </div>
           </div>
-        </div>
-      </div>
+        </CardHeader>
+        <CardContent className="p-0">
+          {/* Chat Interface */}
+          <div className="relative flex h-[60vh] xs:h-[64vh] sm:h-[68vh] md:h-[70vh] min-h-[480px]">
+            {focusMode && (
+              <button
+                type="button"
+                onClick={() => setFocusMode(false)}
+                className="hidden md:inline-flex items-center gap-1.5 absolute left-2 top-2 z-30 bg-background/95 backdrop-blur border border-border rounded-full px-3 py-1.5 text-xs shadow-sm hover:bg-background"
+                title="Show Chats sidebar"
+              >
+                <PanelLeftOpen className="h-4 w-4" />
+                Chats
+              </button>
+            )}
+            <ChatsSidebar
+              focusMode={focusMode}
+              setFocusMode={setFocusMode}
+              sessions={sessions}
+              sessionsLoading={sessionsLoading}
+              sessionsError={sessionsError}
+              sessionId={sessionId}
+              onNewChat={newChat}
+              onOpenSession={openSession}
+              onDeleteSession={deleteSessionById}
+              newChatDisabled={newChatDisabled}
+            />
+            <div className="flex-1 flex flex-col bg-background min-w-0 border-l md:border-l-0">
+              <ChatMessages
+                messages={messages}
+                loading={messagesLoading}
+                focusMode={focusMode}
+                intro={intro}
+              />
+              <ChatComposer
+                onSend={(text) => {
+                  window.dispatchEvent(new CustomEvent("chat:messageSent"));
+                  send(text);
+                }}
+                disabled={inFlight}
+              />
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
-      {/* Unified container */}
-      <div className="relative flex h-[75vh] sm:h-[72vh] rounded-2xl shadow-md overflow-hidden border border-border min-w-0 bg-background">
-        {/* Floating show-chats pill (desktop) */}
-        {focusMode && (
-          <button
-            type="button"
-            onClick={() => setFocusMode(false)}
-            className="hidden md:flex items-center gap-2 absolute left-3 top-3 z-10
-                       rounded-lg border border-border bg-background/85 backdrop-blur px-2.5 py-1.5
-                       text-xs shadow-sm hover:bg-background"
-            title="Show Chats sidebar"
-          >
-            <PanelLeftOpen className="h-4 w-4" />
-            Show Chats
-          </button>
-        )}
-
-        {/* Sidebar (hidden on phones; collapsible on desktop) */}
-        <ChatsSidebar
-          focusMode={focusMode}
-          setFocusMode={setFocusMode}
-          sessions={sessions}
-          sessionsLoading={sessionsLoading}
-          sessionsError={sessionsError}
-          sessionId={sessionId}
-          onNewChat={newChat}
-          onOpenSession={openSession}
-          onDeleteSession={deleteSessionById}
-          newChatDisabled={newChatDisabled} // NEW
-        />
-
-        {/* Chat Panel */}
-        <div className="flex-1 flex flex-col bg-background min-w-0">
-          <ChatMessages
-            messages={messages}
-            loading={messagesLoading}
-            focusMode={focusMode}
-            intro={intro}
-          />
-          <ChatComposer
-            onSend={(text) => {
-              window.dispatchEvent(new CustomEvent("chat:messageSent"));
-              send(text);
-            }}
-            disabled={inFlight}
-          />
-        </div>
-      </div>
-
+      {/* Recent Searches Card */}
       <RecentSearches
         items={recentSearches}
         onDelete={handleDeleteSearch}

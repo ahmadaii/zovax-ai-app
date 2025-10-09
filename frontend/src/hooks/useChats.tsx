@@ -137,7 +137,7 @@ export function useChat({
       return data;
     } catch (e: any) {
       if (isAuthError(e?.status)) onAuthError();
-      setSessionsError(e?.message || "Unable to load sessions.");
+      // setSessionsError(e?.message || "Unable to load sessions.");
       setSessions([]);
       return [] as Session[];
     } finally {
